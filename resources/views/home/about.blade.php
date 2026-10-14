@@ -36,7 +36,7 @@
         <div class="pt-6 border-t border-neutral-100">
             <h2 class="text-lg font-bold font-heading text-neutral-900 mb-3">Tentang Sistem Pendukung Keputusan (TOPSIS)</h2>
             <p class="text-xs sm:text-sm text-neutral-600 leading-relaxed">
-                Aplikasi ini dilengkapi algoritma TOPSIS (Technique for Order Preference by Similarity to Ideal Solution) untuk mengolah 6 kriteria riil toko: volume penjualan, risiko dead stock, rasio urgensi restock, loyalitas pelanggan, margin keuntungan, dan tingkat retur. Hasil analisis memberikan rekomendasi objektif bagi pemilik toko dalam menentukan pengadaan barang dan manajemen stok secara terukur.
+                Aplikasi ini dilengkapi algoritma TOPSIS (Technique for Order Preference by Similarity to Ideal Solution) untuk mengolah empat kriteria toko: urgensi stok, kecepatan penjualan 30 hari terakhir, lama pengadaan dari pemasok, dan margin keuntungan. Hasil analisis memberikan rekomendasi objektif bagi pemilik toko dalam menentukan prioritas restock.
             </p>
         </div>
     </div>

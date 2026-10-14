@@ -1,58 +1,80 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Mobeli
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Mobeli adalah aplikasi toko kelontong berbasis Laravel untuk mengelola katalog, stok, penjualan online, transaksi kasir, laporan, dan rekomendasi restock menggunakan metode TOPSIS. Antarmuka menggunakan identitas biru Mobeli.
 
-## About Laravel
+## Kebutuhan
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- PHP 8.3 atau lebih baru
+- Composer
+- Node.js dan npm
+- MySQL 8.0+ (atau MariaDB) dan ekstensi PHP `pdo_mysql`
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Menjalankan secara lokal (Windows PowerShell)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Dari folder `Project-SPK`, jalankan:
 
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```powershell
+composer install
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+php artisan key:generate
+php artisan migrate --seed
+php artisan storage:link
+npm install
+npm run build
+php artisan serve
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Pastikan server MySQL berjalan dan buat database `project-spk` terlebih dahulu (misalnya melalui phpMyAdmin atau dengan menjalankan `CREATE DATABASE \`project-spk\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`). Periksa `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, dan `DB_PASSWORD` di `.env` agar sesuai dengan server Anda sebelum menjalankan migrasi. Buka alamat lokal yang ditampilkan oleh `php artisan serve` (biasanya `http://127.0.0.1:8000`).
 
-## Contributing
+## Akun demo
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Seeder menyediakan akun berikut. Semua akun demo menggunakan kata sandi `password123`.
 
-## Code of Conduct
+| Peran | Email |
+|---|---|
+| Owner | `owner@tokotopsis.id` |
+| Kasir | `kasir@tokotopsis.id` |
+| Pembeli | `budi@gmail.com` |
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Ganti kata sandi demo sebelum aplikasi digunakan di lingkungan publik.
 
-## Security Vulnerabilities
+## Modul utama
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- **Toko pembeli:** katalog, pencarian, kategori, keranjang, checkout, pesanan, dan profil.
+- **Kasir:** POS, validasi stok, pembayaran tunai atau nontunai, struk, dan riwayat transaksi.
+- **Owner:** dashboard berbasis data, produk dan kategori, pesanan, pelanggan, serta analisis TOPSIS.
+- **Audit stok:** transaksi POS mencatat perubahan stok; perubahan stok lainnya dapat ditelusuri melalui catatan pergerakan stok.
+- **TOPSIS:** matriks keputusan, normalisasi, matriks terbobot, solusi ideal, jarak, skor preferensi, ranking, dan snapshot hasil.
 
-## License
+Owner dan kasir harus masuk menggunakan akun. Katalog pembeli dapat dilihat tanpa akun. Halaman owner dan POS dibatasi berdasarkan peran di sisi server.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Kriteria dan perhitungan TOPSIS
+
+Produk aktif menjadi alternatif. Data penjualan dihitung dari transaksi lunas dalam 30 hari terakhir. Semua nilai kriteria disusun agar nilai yang lebih tinggi selalu berarti prioritas restock yang lebih tinggi.
+
+| Kode | Kriteria | Bobot awal | Nilai yang dihitung |
+|---|---|---:|---|
+| C1 | Urgensi stok | 40% | Jika stok menyentuh/di bawah minimum: `(minimum + 1 - stok) / (minimum + 1)`; selain itu 0. |
+| C2 | Kecepatan penjualan | 30% | Jumlah unit terjual dalam 30 hari terakhir. |
+| C3 | Lama pengadaan | 20% | Waktu tunggu pemasok dalam hari, diisi pada data produk. |
+| C4 | Margin keuntungan | 10% | `((harga jual - harga modal) / harga jual) × 100%`. |
+
+Langkah perhitungan:
+
+1. Normalisasi setiap kolom: `r_ij = x_ij / √(Σ x_ij²)`.
+2. Kalikan hasil normalisasi dengan bobot: `y_ij = w_j × r_ij`.
+3. Karena nilai lebih tinggi selalu lebih mendesak, solusi ideal positif adalah nilai maksimum tiap kolom dan solusi ideal negatif adalah nilai minimumnya.
+4. Hitung jarak Euclidean ke kedua solusi: `D+` dan `D-`.
+5. Hitung nilai preferensi: `Ci = D- / (D+ + D-)`, lalu urutkan dari nilai tertinggi.
+
+Jika waktu pengadaan suatu produk belum diisi, perhitungan dihentikan dan nama produk yang datanya kurang ditampilkan. Nilai TOPSIS adalah rekomendasi untuk owner, bukan pemesanan otomatis.
+
+## Pengujian
+
+Jalankan seluruh pengujian:
+
+```powershell
+php artisan test
+```
+
+Pengujian fitur mencakup transaksi POS dan stok, pembatasan akses owner/kasir, validasi bobot TOPSIS, hasil ranking, data yang belum lengkap, serta seeder akun dan produk demo.

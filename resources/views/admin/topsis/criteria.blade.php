@@ -7,7 +7,7 @@
             <div>
                 <h3 class="text-base font-bold font-heading text-neutral-900">Daftar Kriteria Penilaian Toko</h3>
                 <p class="text-xs text-neutral-500 mt-0.5">
-                    Total bobot seluruh kriteria wajib bernilai tepat <strong>1.00 (100%)</strong>.
+                    Total bobot wajib 1.00 (100%). Skor setiap kriteria dibentuk agar nilai lebih tinggi berarti prioritas restock lebih tinggi.
                 </p>
             </div>
             <div class="flex items-center gap-2">

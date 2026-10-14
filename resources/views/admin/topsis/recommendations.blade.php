@@ -9,6 +9,7 @@
             <h2 class="text-xl font-bold font-heading text-neutral-900 mt-0.5">Insight & Rekomendasi Tindakan Toko</h2>
             <p class="text-xs text-neutral-500 mt-1">
                 Data dihitung otomatis berdasarkan preferensi kedekatan relatif ($C_i$) terhadap solusi ideal positif dan negatif.
+                Perhitungan terakhir: {{ $latestResult->created_at->format('d/m/Y H:i') }}.
             </p>
         </div>
         <div class="flex items-center gap-2">
@@ -151,6 +152,7 @@
                         <th class="p-3 text-center">Sisa Stok</th>
                         <th class="p-3 text-center font-mono">Skor Preferensi ($C_i$)</th>
                         <th class="p-3 text-center">Status Rekomendasi</th>
+                        <th class="p-3">Alasan Prioritas</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-neutral-100">
@@ -175,6 +177,7 @@
                                     {{ $item['product']['stock'] <= $item['product']['min_stock'] ? 'Restock Segera' : ($no <= 3 ? 'Produk Unggulan' : 'Normal') }}
                                 </span>
                             </td>
+                            <td class="p-3 text-neutral-600">{{ $item['reason'] }}</td>
                         </tr>
                         @php $no++; @endphp
                     @endforeach

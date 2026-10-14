@@ -27,19 +27,32 @@
                 extend: {
                     colors: {
                         primary: {
-                            DEFAULT: '#16a34a',
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            500: '#22c55e',
-                            600: '#16a34a',
-                            700: '#15803d',
+                            DEFAULT: '#2563eb',
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        },
+                        emerald: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                            950: '#172554',
                         },
                         secondary: {
                             DEFAULT: '#f97316',
                             500: '#f97316',
                             600: '#ea580c',
                         },
-                        ivory: '#fafaf7',
+                        ivory: '#f8fbff',
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -55,7 +68,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         body {
-            background-color: #fafaf7;
+            background-color: #f8fbff;
             color: #1e293b;
             font-family: 'Inter', sans-serif;
         }
@@ -129,9 +142,11 @@
 
             <!-- Nav Actions & User Info -->
             <div class="flex items-center gap-3">
-                <a href="{{ url('/produk') }}" class="text-sm font-medium text-neutral-700 hover:text-primary transition hidden sm:inline-flex items-center gap-1">
-                    <i data-lucide="grid" class="w-4 h-4"></i> Katalog
-                </a>
+                @if(!auth()->check() || !auth()->user()->isOwner())
+                    <a href="{{ url('/produk') }}" class="text-sm font-medium text-neutral-700 hover:text-primary transition hidden sm:inline-flex items-center gap-1">
+                        <i data-lucide="grid" class="w-4 h-4"></i> Katalog
+                    </a>
+                @endif
 
                 @auth
                     @if(auth()->user()->isOwner())
@@ -144,13 +159,14 @@
                         </a>
                     @endif
 
-                    <!-- Keranjang -->
-                    <a href="{{ url('/akun/keranjang') }}" class="relative p-2 rounded-lg text-neutral-700 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-slate-800 transition">
-                        <i data-lucide="shopping-cart" class="w-5 h-5"></i>
-                        <span id="cart-counter" class="absolute -top-1 -right-1 bg-secondary text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                            {{ session('cart_count', 0) }}
-                        </span>
-                    </a>
+                    @if(!auth()->user()->isOwner())
+                        <a href="{{ url('/akun/keranjang') }}" class="relative p-2 rounded-lg text-neutral-700 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-slate-800 transition">
+                            <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+                            <span id="cart-counter" class="absolute -top-1 -right-1 bg-secondary text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                                {{ session('cart_count', 0) }}
+                            </span>
+                        </a>
+                    @endif
 
                     <!-- Theme Toggle -->
                     <button type="button" onclick="toggleTheme()" title="Ganti Mode Gelap / Terang" class="p-2 rounded-lg text-neutral-600 dark:text-amber-400 hover:bg-neutral-100 dark:hover:bg-slate-800 transition">
@@ -244,8 +260,10 @@
                     <h4 class="font-heading font-semibold text-white text-xs uppercase tracking-wider mb-3">Navigasi Toko</h4>
                     <ul class="space-y-2 text-xs">
                         <li><a href="{{ url('/') }}" class="hover:text-white transition">Beranda Utama</a></li>
-                        <li><a href="{{ url('/produk') }}" class="hover:text-white transition">Katalog Produk Lengkap</a></li>
-                        <li><a href="{{ url('/produk?kategori=sembako') }}" class="hover:text-white transition">Sembako & Kebutuhan Pokok</a></li>
+                        @if(!auth()->check() || !auth()->user()->isOwner())
+                            <li><a href="{{ url('/produk') }}" class="hover:text-white transition">Katalog Produk Lengkap</a></li>
+                            <li><a href="{{ url('/produk?kategori=sembako') }}" class="hover:text-white transition">Sembako & Kebutuhan Pokok</a></li>
+                        @endif
                         <li><a href="{{ url('/tentang') }}" class="hover:text-white transition">Tentang Kami</a></li>
                         <li><a href="{{ url('/kontak') }}" class="hover:text-white transition">Hubungi Kami</a></li>
                     </ul>

@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Product;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\StockMovement;
 use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CashierController extends Controller
 {
@@ -29,82 +34,206 @@ class CashierController extends Controller
     {
         $products = Product::where('is_active', true)->with('category')->get();
         $members = User::where('role', 'customer')->get();
+        $transactionKey = (string) Str::uuid();
+        $cashierId = Auth::id();
 
-        return view('cashier.pos', compact('products', 'members'));
+        return view('cashier.pos', compact('products', 'members', 'transactionKey', 'cashierId'));
     }
 
     public function storeTransaction(Request $request)
     {
-        $request->validate([
-            'items' => 'required|array|min:1',
-            'payment_method' => 'required|in:cash,midtrans_qris,manual_transfer',
-            'subtotal' => 'required|numeric',
-            'discount' => 'nullable|numeric',
-            'total' => 'required|numeric',
-            'cash_given' => 'nullable|numeric',
+        $idempotencyKey = $request->validate([
+            'idempotency_key' => ['required', 'uuid'],
+        ])['idempotency_key'];
+
+        $existingOrder = Order::query()
+            ->with(['customer', 'items'])
+            ->where('idempotency_key', $idempotencyKey)
+            ->where('cashier_id', Auth::id())
+            ->first();
+        if ($existingOrder) {
+            return response()->json([
+                'success' => true,
+                ...$this->receiptPayload($existingOrder),
+                'next_idempotency_key' => (string) Str::uuid(),
+                'message' => 'Transaksi ini sudah berhasil diproses.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.id' => ['required', 'integer', 'distinct'],
+            'items.*.qty' => ['required', 'integer', 'min:1'],
+            'payment_method' => ['required', 'in:cash'],
+            'cash_given' => ['required', 'numeric', 'min:0'],
+            'customer_id' => [
+                'nullable',
+                Rule::exists('users', 'id')->where('role', 'customer')->where('is_active', true),
+            ],
         ]);
 
-        $orderNumber = 'POS-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
+        $items = collect($validated['items'])
+            ->map(fn (array $item): array => [
+                'id' => (int) $item['id'],
+                'qty' => (int) $item['qty'],
+            ])
+            ->sortBy('id')
+            ->values();
 
-        DB::beginTransaction();
         try {
-            $order = Order::create([
-                'order_number' => $orderNumber,
-                'type' => 'offline',
-                'cashier_id' => Auth::id(),
-                'customer_id' => $request->customer_id ?: null,
-                'subtotal' => $request->subtotal,
-                'discount' => $request->discount ?? 0,
-                'total' => $request->total,
-                'payment_method' => $request->payment_method,
-                'payment_status' => 'paid',
-                'order_status' => 'completed',
-                'paid_at' => now(),
-            ]);
+            $receipt = DB::transaction(function () use ($validated, $items, $idempotencyKey): array {
+                $products = Product::query()
+                    ->whereIn('id', $items->pluck('id'))
+                    ->where('is_active', true)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+                if ($products->count() !== $items->count()) {
+                    throw ValidationException::withMessages([
+                        'items' => ['Satu atau beberapa produk sudah tidak tersedia. Muat ulang daftar produk.'],
+                    ]);
+                }
 
-            foreach ($request->items as $item) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $item['id'],
-                    'product_name' => $item['name'],
-                    'price' => $item['price'],
-                    'cost_price' => $item['cost_price'] ?? 0,
-                    'qty' => $item['qty'],
-                    'subtotal' => $item['price'] * $item['qty'],
+                $stockIssues = $items
+                    ->filter(fn (array $item): bool => $products[$item['id']]->stock < $item['qty'])
+                    ->map(fn (array $item): string => $products[$item['id']]->name)
+                    ->unique()
+                    ->values();
+                if ($stockIssues->isNotEmpty()) {
+                    throw ValidationException::withMessages([
+                        'items' => ['Stok tidak mencukupi untuk: '.$stockIssues->implode(', ').'.'],
+                    ]);
+                }
+
+                $customer = isset($validated['customer_id'])
+                    ? User::query()->whereKey($validated['customer_id'])->where('role', 'customer')->firstOrFail()
+                    : null;
+                $subtotal = $items->sum(fn (array $item): float => (float) $products[$item['id']]->sell_price * $item['qty']);
+                $discountRate = match ($customer?->member_tier) {
+                    'gold' => 0.05,
+                    'silver' => 0.03,
+                    default => 0.0,
+                };
+                $discount = round($subtotal * $discountRate, 2);
+                $total = round(max(0, $subtotal - $discount), 2);
+                $cashGiven = (float) $validated['cash_given'];
+                if ($cashGiven < $total) {
+                    throw ValidationException::withMessages([
+                        'cash_given' => ['Nominal uang tunai harus minimal sama dengan total transaksi.'],
+                    ]);
+                }
+
+                $order = Order::create([
+                    'order_number' => 'POS-'.now()->format('Ymd').'-'.Str::upper(Str::random(8)),
+                    'type' => 'offline',
+                    'cashier_id' => Auth::id(),
+                    'customer_id' => $customer?->id,
+                    'subtotal' => $subtotal,
+                    'discount' => $discount,
+                    'total' => $total,
+                    'cash_given' => $cashGiven,
+                    'change_amount' => $cashGiven - $total,
+                    'payment_method' => 'cash',
+                    'payment_status' => 'paid',
+                    'order_status' => 'completed',
+                    'idempotency_key' => $idempotencyKey,
+                    'paid_at' => now(),
                 ]);
 
-                // Kurangi stok fisik
-                $product = Product::find($item['id']);
-                if ($product) {
+                foreach ($items as $item) {
+                    $product = $products[$item['id']];
+                    $price = (float) $product->sell_price;
+                    $stockBefore = $product->stock;
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $product->id,
+                        'product_name' => $product->name,
+                        'price' => $price,
+                        'cost_price' => $product->cost_price,
+                        'qty' => $item['qty'],
+                        'subtotal' => $price * $item['qty'],
+                    ]);
+
                     $product->decrement('stock', $item['qty']);
+
+                    StockMovement::create([
+                        'product_id' => $product->id,
+                        'user_id' => Auth::id(),
+                        'order_id' => $order->id,
+                        'type' => 'out',
+                        'qty' => $item['qty'],
+                        'stock_before' => $stockBefore,
+                        'stock_after' => $product->fresh()->stock,
+                        'reason' => 'offline_sale',
+                    ]);
                 }
+
+                return ['order_id' => $order->id];
+            });
+        } catch (QueryException $exception) {
+            $exceptionMessage = strtolower($exception->getMessage());
+            $isIdempotencyConflict = str_contains($exceptionMessage, 'idempotency_key')
+                && (str_contains($exceptionMessage, 'unique') || str_contains($exceptionMessage, 'duplicate'));
+            if (! $isIdempotencyConflict) {
+                throw $exception;
             }
 
-            DB::commit();
+            $existingOrder = Order::query()
+                ->with(['customer', 'items'])
+                ->where('idempotency_key', $idempotencyKey)
+                ->where('cashier_id', Auth::id())
+                ->first();
+
+            if (! $existingOrder) {
+                throw $exception;
+            }
 
             return response()->json([
                 'success' => true,
-                'order_number' => $order->order_number,
-                'total' => $order->total,
-                'change' => max(0, ($request->cash_given ?? $order->total) - $order->total),
-                'message' => 'Transaksi POS berhasil disimpan dan struk siap dicetak.',
+                ...$this->receiptPayload($existingOrder),
+                'next_idempotency_key' => (string) Str::uuid(),
+                'message' => 'Transaksi ini sudah berhasil diproses.',
             ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menyimpan transaksi: ' . $e->getMessage(),
-            ], 500);
         }
+
+        $order = Order::query()->with(['customer', 'items'])->findOrFail($receipt['order_id']);
+
+        return response()->json([
+            'success' => true,
+            ...$this->receiptPayload($order),
+            'next_idempotency_key' => (string) Str::uuid(),
+            'message' => 'Transaksi POS berhasil disimpan dan struk siap dicetak.',
+        ]);
     }
 
     public function transactions()
     {
-        $orders = Order::where('type', 'offline')
-            ->with(['items', 'customer'])
-            ->latest()
-            ->paginate(15);
+        $query = Order::query()->where('type', 'offline');
+        if (Auth::user()->isCashier()) {
+            $query->where('cashier_id', Auth::id());
+        }
+        $orders = $query->with(['items', 'customer'])->latest()->paginate(15);
 
         return view('cashier.transactions', compact('orders'));
+    }
+
+    private function receiptPayload(Order $order): array
+    {
+        return [
+            'order_number' => $order->order_number,
+            'subtotal' => (float) $order->subtotal,
+            'discount' => (float) $order->discount,
+            'total' => (float) $order->total,
+            'cash_given' => (float) $order->cash_given,
+            'change' => (float) $order->change_amount,
+            'customer_name' => $order->customer?->name ?? 'Pelanggan Umum',
+            'items' => $order->items->map(fn (OrderItem $item): array => [
+                'name' => $item->product_name,
+                'qty' => $item->qty,
+                'price' => (float) $item->price,
+                'subtotal' => (float) $item->subtotal,
+            ])->all(),
+        ];
     }
 }

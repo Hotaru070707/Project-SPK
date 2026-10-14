@@ -19,6 +19,7 @@ class Product extends Model
         'sell_price',
         'stock',
         'min_stock',
+        'supplier_lead_time_days',
         'unit',
         'image',
         'is_active',
@@ -35,6 +36,7 @@ class Product extends Model
             'sell_price' => 'decimal:2',
             'stock' => 'integer',
             'min_stock' => 'integer',
+            'supplier_lead_time_days' => 'integer',
             'is_active' => 'boolean',
         ];
     }
@@ -62,7 +64,10 @@ class Product extends Model
     // Helper attribute margin
     public function getMarginAttribute(): float
     {
-        if ($this->sell_price <= 0) return 0;
+        if ($this->sell_price <= 0) {
+            return 0;
+        }
+
         return round((($this->sell_price - $this->cost_price) / $this->sell_price) * 100, 1);
     }
 
@@ -75,7 +80,7 @@ class Product extends Model
     // Accessor for product image URL
     public function getImageUrlAttribute(): ?string
     {
-        if (!$this->image) {
+        if (! $this->image) {
             return null;
         }
 
@@ -83,6 +88,6 @@ class Product extends Model
             return $this->image;
         }
 
-        return asset('storage/' . $this->image);
+        return asset('storage/'.$this->image);
     }
 }

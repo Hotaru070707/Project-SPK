@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Product;
 use App\Models\Category;
+use App\Models\Product;
+use App\Models\TopsisResult;
+use Illuminate\Http\Request;
 
 class HomeController extends Controller
 {
@@ -16,8 +17,11 @@ class HomeController extends Controller
             ->orderBy('stock', 'desc')
             ->take(8)
             ->get();
+        $latestTopsis = auth()->user()?->isOwner()
+            ? TopsisResult::query()->latest()->first()
+            : null;
 
-        return view('home.index', compact('categories', 'featuredProducts'));
+        return view('home.index', compact('categories', 'featuredProducts', 'latestTopsis'));
     }
 
     public function catalog(Request $request)
@@ -37,8 +41,8 @@ class HomeController extends Controller
             $searchTerm = $request->q;
             $query->where(function ($q) use ($searchTerm) {
                 $q->where('name', 'like', "%{$searchTerm}%")
-                  ->orWhere('description', 'like', "%{$searchTerm}%")
-                  ->orWhere('barcode', 'like', "%{$searchTerm}%");
+                    ->orWhere('description', 'like', "%{$searchTerm}%")
+                    ->orWhere('barcode', 'like', "%{$searchTerm}%");
             });
         }
 

@@ -24,8 +24,21 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: '#16a34a',
+                        primary: '#2563eb',
                         sidebar: '#0f172a',
+                        emerald: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                            950: '#172554',
+                        },
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -131,11 +144,20 @@
                     <a href="{{ route('admin.categories') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.categories*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
                         <i data-lucide="tags" class="w-4 h-4"></i> Kategori Produk
                     </a>
+                    <a href="{{ route('admin.stock') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.stock*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
+                        <i data-lucide="boxes" class="w-4 h-4"></i> Stok Masuk & Mutasi
+                    </a>
                     <a href="{{ route('admin.orders') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.orders*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
                         <i data-lucide="shopping-bag" class="w-4 h-4"></i> Pesanan & Verifikasi Bukti
                     </a>
+                    <a href="{{ route('admin.reports') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.reports*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
+                        <i data-lucide="chart-no-axes-combined" class="w-4 h-4"></i> Laporan
+                    </a>
                     <a href="{{ route('admin.customers') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.customers*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
                         <i data-lucide="users" class="w-4 h-4"></i> Pelanggan & Member
+                    </a>
+                    <a href="{{ route('admin.users') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.users*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
+                        <i data-lucide="user-round-cog" class="w-4 h-4"></i> Akun Kasir
                     </a>
                 </div>
             </div>
@@ -145,10 +167,6 @@
                 <div class="space-y-1">
                     <a href="{{ url('/kasir/pos') }}" class="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800/80 text-emerald-300 hover:bg-slate-800 font-semibold">
                         <span class="flex items-center gap-2"><i data-lucide="monitor" class="w-4 h-4"></i> Buka POS Kasir</span>
-                        <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-60"></i>
-                    </a>
-                    <a href="{{ url('/') }}" class="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800/80 text-slate-300 hover:bg-slate-800">
-                        <span class="flex items-center gap-2"><i data-lucide="store" class="w-4 h-4"></i> Toko Online</span>
                         <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-60"></i>
                     </a>
                 </div>

@@ -11,6 +11,7 @@ class Order extends Model
 
     protected $fillable = [
         'order_number',
+        'idempotency_key',
         'type',
         'customer_id',
         'cashier_id',
@@ -19,6 +20,8 @@ class Order extends Model
         'subtotal',
         'discount',
         'total',
+        'cash_given',
+        'change_amount',
         'payment_method',
         'payment_status',
         'order_status',
@@ -37,6 +40,8 @@ class Order extends Model
             'subtotal' => 'decimal:2',
             'discount' => 'decimal:2',
             'total' => 'decimal:2',
+            'cash_given' => 'decimal:2',
+            'change_amount' => 'decimal:2',
             'paid_at' => 'datetime',
             'midtrans_payload' => 'array',
         ];
@@ -51,7 +56,6 @@ class Order extends Model
     {
         return $this->belongsTo(User::class, 'cashier_id');
     }
-
 
     public function address()
     {

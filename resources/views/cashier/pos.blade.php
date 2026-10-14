@@ -118,15 +118,9 @@
         </div>
 
         <!-- Pilihan Metode Bayar -->
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-1 gap-2">
             <button type="button" onclick="setPaymentMethod('cash')" id="btnMethodCash" class="p-2.5 rounded-xl border-2 border-emerald-600 bg-emerald-50 text-emerald-900 font-bold text-xs text-center">
                 💵 TUNAI
-            </button>
-            <button type="button" onclick="setPaymentMethod('midtrans_qris')" id="btnMethodQris" class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-xs text-center">
-                📱 QRIS
-            </button>
-            <button type="button" onclick="setPaymentMethod('manual_transfer')" id="btnMethodTf" class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-xs text-center">
-                🏦 TRANSFER
             </button>
         </div>
 
@@ -204,6 +198,9 @@
     let posCart = [];
     let currentMethod = 'cash';
     let currentTotal = 0;
+    const transactionStorageKey = @json('mobeliPosTransactionKey:'.$cashierId);
+    let transactionKey = sessionStorage.getItem(transactionStorageKey) || @json($transactionKey);
+    sessionStorage.setItem(transactionStorageKey, transactionKey);
 
     function addToPosCart(product) {
         let existing = posCart.find(i => i.id === product.id);
@@ -312,19 +309,9 @@
     }
 
     function setPaymentMethod(method) {
-        currentMethod = method;
-        ['btnMethodCash', 'btnMethodQris', 'btnMethodTf'].forEach(id => {
-            document.getElementById(id).classList.remove('border-emerald-600', 'bg-emerald-50', 'text-emerald-900');
-            document.getElementById(id).classList.add('border-slate-200', 'bg-slate-50', 'text-slate-700');
-        });
-
-        if (method === 'cash') {
-            document.getElementById('btnMethodCash').classList.add('border-emerald-600', 'bg-emerald-50', 'text-emerald-900');
-            document.getElementById('cashInputSection').classList.remove('hidden');
-        } else {
-            document.getElementById(method === 'midtrans_qris' ? 'btnMethodQris' : 'btnMethodTf').classList.add('border-emerald-600', 'bg-emerald-50', 'text-emerald-900');
-            document.getElementById('cashInputSection').classList.add('hidden');
-        }
+        currentMethod = 'cash';
+        document.getElementById('btnMethodCash').classList.add('border-emerald-600', 'bg-emerald-50', 'text-emerald-900');
+        document.getElementById('cashInputSection').classList.remove('hidden');
         calculateChange();
     }
 
@@ -360,8 +347,7 @@
     async function submitPosTransaction() {
         let memberSelect = document.getElementById('memberSelect');
         let customerId = memberSelect.value !== "0" ? memberSelect.value : null;
-        let subtotal = posCart.reduce((sum, i) => sum + (i.price * i.qty), 0);
-        let cashGiven = parseFloat(document.getElementById('cashGiven').value) || currentTotal;
+        let cashGiven = parseFloat(document.getElementById('cashGiven').value) || 0;
 
         if (currentMethod === 'cash' && cashGiven < currentTotal) {
             alert('Nominal uang tunai kurang dari total belanjaan!');
@@ -369,14 +355,14 @@
         }
 
         let payload = {
-            items: posCart,
-            payment_method: currentMethod,
+            items: posCart.map(({ id, qty }) => ({ id, qty })),
+            payment_method: 'cash',
             customer_id: customerId,
-            subtotal: subtotal,
-            discount: subtotal - currentTotal,
-            total: currentTotal,
             cash_given: cashGiven,
+            idempotency_key: transactionKey,
         };
+        const submitButton = document.getElementById('btnSubmitTx');
+        submitButton.disabled = true;
 
         try {
             let res = await fetch("{{ route('cashier.store') }}", {
@@ -389,38 +375,48 @@
             });
 
             let data = await res.json();
-            if (data.success) {
-                closePaymentModal();
-                showReceipt(data, payload);
-                posCart = [];
-                renderPosCart();
-            } else {
-                alert('Gagal: ' + data.message);
+            if (!res.ok || !data.success) {
+                const validationMessages = Object.values(data.errors || {}).flat();
+                alert(validationMessages.join('\n') || data.message || 'Transaksi gagal diproses.');
+                return;
             }
+
+            closePaymentModal();
+            showReceipt(data);
+            posCart = [];
+            renderPosCart();
+            transactionKey = data.next_idempotency_key;
+            sessionStorage.setItem(transactionStorageKey, transactionKey);
         } catch (err) {
+            console.error(err);
             alert('Terjadi kesalahan koneksi server.');
+        } finally {
+            submitButton.disabled = false;
         }
     }
 
-    function showReceipt(data, req) {
+    function showReceipt(data) {
         document.getElementById('rcInvoice').innerText = data.order_number;
         document.getElementById('rcDate').innerText = new Date().toLocaleTimeString('id-ID');
-        document.getElementById('rcSubtotal').innerText = 'Rp ' + req.subtotal.toLocaleString('id-ID');
-        document.getElementById('rcDiscount').innerText = '- Rp ' + req.discount.toLocaleString('id-ID');
-        document.getElementById('rcTotal').innerText = 'Rp ' + req.total.toLocaleString('id-ID');
-        document.getElementById('rcMethod').innerText = req.payment_method.toUpperCase();
-        document.getElementById('rcPay').innerText = 'Rp ' + (req.cash_given || req.total).toLocaleString('id-ID');
-        document.getElementById('rcChange').innerText = 'Rp ' + (data.change || 0).toLocaleString('id-ID');
+        document.getElementById('rcMember').innerText = data.customer_name;
+        document.getElementById('rcSubtotal').innerText = 'Rp ' + data.subtotal.toLocaleString('id-ID');
+        document.getElementById('rcDiscount').innerText = '- Rp ' + data.discount.toLocaleString('id-ID');
+        document.getElementById('rcTotal').innerText = 'Rp ' + data.total.toLocaleString('id-ID');
+        document.getElementById('rcMethod').innerText = 'TUNAI';
+        document.getElementById('rcPay').innerText = 'Rp ' + data.cash_given.toLocaleString('id-ID');
+        document.getElementById('rcChange').innerText = 'Rp ' + data.change.toLocaleString('id-ID');
 
-        let itemsHtml = '';
-        req.items.forEach(i => {
-            itemsHtml += `
-                <div class="flex justify-between">
-                    <span>${i.name} (${i.qty}×)</span>
-                    <span>Rp ${(i.price * i.qty).toLocaleString('id-ID')}</span>
-                </div>`;
-        });
-        document.getElementById('rcItems').innerHTML = itemsHtml;
+        const receiptItems = document.getElementById('rcItems');
+        receiptItems.replaceChildren(...data.items.map(item => {
+            const row = document.createElement('div');
+            row.className = 'flex justify-between';
+            const label = document.createElement('span');
+            label.textContent = `${item.name} (${item.qty}×)`;
+            const amount = document.createElement('span');
+            amount.textContent = 'Rp ' + item.subtotal.toLocaleString('id-ID');
+            row.append(label, amount);
+            return row;
+        }));
         document.getElementById('receiptModal').classList.remove('hidden');
     }
 

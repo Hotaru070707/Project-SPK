@@ -19,6 +19,23 @@
         </div>
     </div>
 
+    <div class="bg-white rounded-2xl border border-neutral-200 p-5 shadow-xs">
+        <h3 class="text-sm font-bold font-heading text-neutral-900 mb-3">Kriteria dan Bobot Perhitungan</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            @foreach($criteria as $criterion)
+                <div class="rounded-xl border border-neutral-100 bg-neutral-50 p-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-mono text-xs font-bold text-primary">{{ $criterion->code }}</span>
+                        <span class="font-mono text-xs font-bold text-neutral-700">{{ number_format((float) $criterion->weight * 100, 0) }}%</span>
+                    </div>
+                    <p class="mt-1 text-xs font-bold text-neutral-900">{{ $criterion->name }}</p>
+                    <p class="mt-1 text-[11px] text-neutral-500">{{ $criterion->description }}</p>
+                </div>
+            @endforeach
+        </div>
+        <p class="mt-3 text-[11px] text-neutral-500">Kecepatan penjualan menggunakan transaksi lunas 30 hari terakhir. Perhitungan dihentikan bila waktu pengadaan belum diisi pada salah satu produk aktif.</p>
+    </div>
+
     <!-- LANGKAH 1: Matriks Keputusan (X) -->
     <div class="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-3">
         <div class="flex items-center justify-between pb-2 border-b border-neutral-100">
@@ -44,7 +61,7 @@
                         <tr class="hover:bg-neutral-50">
                             <td class="p-2.5 font-bold text-neutral-900 truncate max-w-xs">{{ $row['product']->name }}</td>
                             @foreach($criteria as $c)
-                                <td class="p-2.5 text-center font-mono">{{ $row[$c->code] }}</td>
+                                <td class="p-2.5 text-center font-mono">{{ number_format((float) $row[$c->code], 4) }}</td>
                             @endforeach
                         </tr>
                     @endforeach
@@ -78,7 +95,7 @@
                         <tr class="hover:bg-neutral-50">
                             <td class="p-2.5 font-bold text-neutral-900 truncate max-w-xs">{{ $row['product']->name }}</td>
                             @foreach($criteria as $c)
-                                <td class="p-2.5 text-center font-mono text-emerald-800 font-semibold">{{ $row[$c->code] }}</td>
+                                <td class="p-2.5 text-center font-mono text-emerald-800 font-semibold">{{ number_format((float) $row[$c->code], 4) }}</td>
                             @endforeach
                         </tr>
                     @endforeach
@@ -112,7 +129,7 @@
                         <tr class="hover:bg-neutral-50">
                             <td class="p-2.5 font-bold text-neutral-900 truncate max-w-xs">{{ $row['product']->name }}</td>
                             @foreach($criteria as $c)
-                                <td class="p-2.5 text-center font-mono text-slate-800">{{ $row[$c->code] }}</td>
+                                <td class="p-2.5 text-center font-mono text-slate-800">{{ number_format((float) $row[$c->code], 4) }}</td>
                             @endforeach
                         </tr>
                     @endforeach
@@ -137,7 +154,7 @@
                     @foreach($idealPositive as $code => $val)
                         <div class="p-2 bg-white rounded border border-emerald-200">
                             <span class="text-neutral-400 block text-[10px]">{{ $code }}</span>
-                            <span class="font-bold text-emerald-800">{{ $val }}</span>
+                            <span class="font-bold text-emerald-800">{{ number_format((float) $val, 4) }}</span>
                         </div>
                     @endforeach
                 </div>
@@ -149,7 +166,7 @@
                     @foreach($idealNegative as $code => $val)
                         <div class="p-2 bg-white rounded border border-orange-200">
                             <span class="text-neutral-400 block text-[10px]">{{ $code }}</span>
-                            <span class="font-bold text-orange-800">{{ $val }}</span>
+                            <span class="font-bold text-orange-800">{{ number_format((float) $val, 4) }}</span>
                         </div>
                     @endforeach
                 </div>
@@ -189,8 +206,8 @@
                                 </span>
                             </td>
                             <td class="p-3 font-bold text-neutral-900">{{ $item['product']->name }}</td>
-                            <td class="p-3 text-center font-mono">{{ $distances[$pid]['d_plus'] }}</td>
-                            <td class="p-3 text-center font-mono">{{ $distances[$pid]['d_minus'] }}</td>
+                            <td class="p-3 text-center font-mono">{{ number_format($distances[$pid]['d_plus'], 4) }}</td>
+                            <td class="p-3 text-center font-mono">{{ number_format($distances[$pid]['d_minus'], 4) }}</td>
                             <td class="p-3 text-center font-mono font-extrabold text-emerald-800 text-sm">
                                 {{ number_format($item['ci'], 4) }}
                             </td>

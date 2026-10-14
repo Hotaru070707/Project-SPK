@@ -18,22 +18,66 @@
         </div>
     </div>
 
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-xs">
+            <div class="mb-4 flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-bold font-heading text-neutral-900">Omzet 7 Hari Terakhir</h2>
+                    <p class="text-[11px] text-neutral-500">Hanya transaksi lunas, berdasarkan waktu pembayaran.</p>
+                </div>
+                <i data-lucide="chart-no-axes-column-increasing" class="h-5 w-5 text-primary"></i>
+            </div>
+            @php $maxDailyRevenue = max(1, (float) $salesChart->max('revenue')); @endphp
+            <div class="space-y-3">
+                @foreach($salesChart as $day)
+                    <div class="flex items-center gap-3 text-[11px]">
+                        <span class="w-8 shrink-0 font-semibold text-neutral-500">{{ $day['label'] }}</span>
+                        <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-blue-50">
+                            <div class="h-full rounded-full bg-primary" style="width: {{ min(100, ($day['revenue'] / $maxDailyRevenue) * 100) }}%"></div>
+                        </div>
+                        <span class="w-28 shrink-0 text-right font-mono text-neutral-600">Rp {{ number_format($day['revenue'], 0, ',', '.') }}</span>
+                    </div>
+                @endforeach
+            </div>
+        </section>
+
+        <section class="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xs">
+            <div class="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 p-4">
+                <div>
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-neutral-700">Stok Kritis</h2>
+                    <p class="mt-1 text-[11px] text-neutral-500">{{ $lowStockProducts->count() }} produk menyentuh atau di bawah stok minimum</p>
+                </div>
+                <a href="{{ route('admin.stock') }}" class="text-xs font-bold text-primary hover:underline">Kelola stok</a>
+            </div>
+            <div class="divide-y divide-neutral-100">
+                @forelse($lowStockProducts->take(5) as $product)
+                    <div class="flex items-center justify-between gap-3 p-3 text-xs">
+                        <span class="font-semibold text-neutral-900">{{ $product->name }}</span>
+                        <span class="shrink-0 font-mono text-orange-700">{{ $product->stock }} / min {{ $product->min_stock }} {{ $product->unit }}</span>
+                    </div>
+                @empty
+                    <p class="p-5 text-center text-xs text-neutral-500">Tidak ada stok kritis.</p>
+                @endforelse
+            </div>
+        </section>
+    </div>
+
     <!-- KPI Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div class="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-            <span class="text-xs text-neutral-400 font-bold uppercase tracking-wider block">Total Pendapatan (Omzet)</span>
+            <span class="text-xs text-neutral-400 font-bold uppercase tracking-wider block">Penjualan Hari Ini (Omzet)</span>
             <div class="text-2xl font-black text-neutral-900 price-font mt-2">
                 Rp {{ number_format($totalRevenue, 0, ',', '.') }}
             </div>
-            <span class="text-[11px] text-emerald-600 font-bold mt-1 inline-block">Transaksi Lunas (Paid)</span>
+            <span class="text-[11px] text-emerald-600 font-bold mt-1 inline-block">Transaksi lunas hari ini</span>
         </div>
 
         <div class="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-            <span class="text-xs text-neutral-400 font-bold uppercase tracking-wider block">Total Transaksi Selesai</span>
+            <span class="text-xs text-neutral-400 font-bold uppercase tracking-wider block">Transaksi Lunas Hari Ini</span>
             <div class="text-2xl font-black text-neutral-900 price-font mt-2">
-                {{ $totalOrders }} Pesanan
+                {{ $totalOrders }} Transaksi
             </div>
-            <span class="text-[11px] text-neutral-500 mt-1 inline-block">Online & Offline POS</span>
+            <span class="text-[11px] text-neutral-500 mt-1 inline-block">Online & offline POS</span>
         </div>
 
         <div class="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
@@ -42,6 +86,14 @@
                 {{ $totalProducts }} Item
             </div>
             <span class="text-[11px] text-emerald-600 font-bold mt-1 inline-block">Tersedia di Toko</span>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
+            <span class="text-xs text-neutral-400 font-bold uppercase tracking-wider block">Total Unit Stok</span>
+            <div class="text-2xl font-black text-neutral-900 price-font mt-2">
+                {{ number_format($totalStockUnits, 0, ',', '.') }} Unit
+            </div>
+            <span class="text-[11px] text-neutral-500 mt-1 inline-block">Dari seluruh produk aktif</span>
         </div>
 
         <div class="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
@@ -58,7 +110,7 @@
         <div class="flex items-center justify-between pb-3 border-b border-neutral-100">
             <div>
                 <h3 class="text-base font-bold font-heading text-neutral-900">Rekomendasi Terkini Algoritma TOPSIS</h3>
-                <p class="text-xs text-neutral-500">Berdasarkan kalkulasi 6 kriteria (penjualan, dead stock, urgensi restock, loyalitas, margin, komplain).</p>
+                <p class="text-xs text-neutral-500">Berdasarkan empat kriteria TOPSIS: urgensi stok, kecepatan penjualan, waktu pengadaan, dan margin.</p>
             </div>
             <a href="{{ route('admin.topsis.recommendations') }}" class="text-xs font-bold text-emerald-600 hover:underline flex items-center gap-1">
                 Laporan Lengkap & Ranking <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>

@@ -2,18 +2,17 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
-use App\Models\User;
 use App\Models\Category;
-use App\Models\Product;
-use App\Models\Promo;
-use App\Models\TopsisCriterion;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\Promo;
 use App\Models\Setting;
-use App\Models\Shift;
+use App\Models\TopsisCriterion;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -262,60 +261,47 @@ class DatabaseSeeder extends Seeder
 
         $products = [];
         foreach ($productsData as $prod) {
+            $prod['supplier_lead_time_days'] ??= 3;
             $products[] = Product::updateOrCreate(['slug' => $prod['slug']], $prod);
         }
 
-        // 4. SEED TOPSIS 6 CRITERIA (Total Weight = 1.0000)
+        // 4. SEED TOPSIS CRITERIA (Total Weight = 1.0000)
         $criteria = [
             [
                 'code' => 'C1',
-                'name' => 'Produk Terlaris (Volume Penjualan)',
-                'description' => 'Total kuantitas item yang terjual pada periode analisis.',
+                'name' => 'Urgensi Stok',
+                'description' => 'Urgensi dihitung dari stok tersedia dibandingkan stok minimum.',
                 'type' => 'benefit',
-                'weight' => 0.2500,
-                'data_source' => 'total_sold_qty',
+                'weight' => 0.4000,
+                'data_source' => 'stock_urgency',
             ],
             [
                 'code' => 'C2',
-                'name' => 'Perputaran Lambat / Dead Stock',
-                'description' => 'Jumlah hari sejak penjualan terakhir (semakin lama, semakin dead stock).',
-                'type' => 'cost',
-                'weight' => 0.1500,
-                'data_source' => 'days_without_sales',
+                'name' => 'Kecepatan Penjualan',
+                'description' => 'Jumlah unit terjual selama 30 hari terakhir.',
+                'type' => 'benefit',
+                'weight' => 0.3000,
+                'data_source' => 'units_sold_30_days',
             ],
             [
                 'code' => 'C3',
-                'name' => 'Prioritas Restock',
-                'description' => 'Rasio ambang batas stok terhadap sisa stok (Min Stock / Current Stock).',
+                'name' => 'Lama Pengadaan',
+                'description' => 'Waktu tunggu pengadaan dari pemasok dalam hari.',
                 'type' => 'benefit',
                 'weight' => 0.2000,
-                'data_source' => 'restock_urgency',
+                'data_source' => 'supplier_lead_time_days',
             ],
             [
                 'code' => 'C4',
-                'name' => 'Loyalitas Pelanggan',
-                'description' => 'Frekuensi pembelian berulang oleh member terdaftar.',
-                'type' => 'benefit',
-                'weight' => 0.1500,
-                'data_source' => 'repeat_buyer_count',
-            ],
-            [
-                'code' => 'C5',
                 'name' => 'Margin Keuntungan',
-                'description' => 'Persentase selisih harga jual terhadap harga modal.',
+                'description' => 'Persentase margin kotor dari harga jual dan harga modal.',
                 'type' => 'benefit',
-                'weight' => 0.1500,
+                'weight' => 0.1000,
                 'data_source' => 'profit_margin_percent',
             ],
-            [
-                'code' => 'C6',
-                'name' => 'Tingkat Retur / Komplain',
-                'description' => 'Rasio produk yang mengalami komplain atau pengembalian.',
-                'type' => 'cost',
-                'weight' => 0.1000,
-                'data_source' => 'return_rate',
-            ],
         ];
+
+        TopsisCriterion::whereNotIn('code', ['C1', 'C2', 'C3', 'C4'])->delete();
 
         foreach ($criteria as $crit) {
             TopsisCriterion::updateOrCreate(['code' => $crit['code']], $crit);
@@ -362,22 +348,12 @@ class DatabaseSeeder extends Seeder
             Setting::updateOrCreate(['key' => $st['key']], $st);
         }
 
-        // 7. INITIAL SHIFT KASIR
-        $shift = Shift::create([
-            'cashier_id' => $cashier->id,
-            'opened_at' => Carbon::now()->subHours(4),
-            'opening_cash' => 200000,
-            'status' => 'open',
-            'notes' => 'Shift pagi berjalan lancar',
-        ]);
-
-        // 8. SAMPLE POS TRANSACTIONS (Offline)
+        // 7. SAMPLE POS TRANSACTIONS (Offline)
         $posOrder = Order::create([
-            'order_number' => 'POS-' . date('Ymd') . '-0001',
+            'order_number' => 'POS-'.date('Ymd').'-0001',
             'type' => 'offline',
             'cashier_id' => $cashier->id,
             'customer_id' => $customer1->id,
-            'shift_id' => $shift->id,
             'subtotal' => 108500,
             'discount' => 3255, // Diskon silver member 3%
             'total' => 105245,
@@ -409,7 +385,7 @@ class DatabaseSeeder extends Seeder
 
         // Sample Online Order
         $onlineOrder = Order::create([
-            'order_number' => 'ONL-' . date('Ymd') . '-0001',
+            'order_number' => 'ONL-'.date('Ymd').'-0001',
             'type' => 'online',
             'customer_id' => $customer2->id,
             'subtotal' => 59500,

@@ -92,57 +92,42 @@
                                 <h3 class="text-base font-bold font-heading text-neutral-900">Rekomendasi Restock TOPSIS</h3>
                             </div>
                             <span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold font-mono">
-                                6 Kriteria
+                                4 Kriteria
                             </span>
                         </div>
 
-                        <!-- Real Live Preview of Grocery Insights -->
-                        <div class="space-y-3.5">
-                            <div class="p-3 rounded-xl bg-neutral-50 border border-neutral-100 flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">
-                                        🌾
-                                    </div>
-                                    <div>
-                                        <p class="text-xs font-bold text-neutral-900">Beras Pandan Wangi 5kg</p>
-                                        <span class="text-[10px] text-neutral-500">Penjualan tertinggi (Rank 1 TOPSIS)</span>
-                                    </div>
+                        @if(auth()->user()?->isOwner())
+                            @if($latestTopsis && !empty($latestTopsis->preferences))
+                                <div class="space-y-3.5">
+                                    @foreach(array_slice($latestTopsis->preferences, 0, 3) as $recommendation)
+                                        <div class="p-3 rounded-xl bg-neutral-50 border border-neutral-100 flex items-center justify-between gap-3">
+                                            <div class="min-w-0">
+                                                <p class="text-xs font-bold text-neutral-900 truncate">{{ $recommendation['product']['name'] }}</p>
+                                                <span class="text-[10px] text-neutral-500">{{ $recommendation['reason'] ?? 'Prioritas dihitung dari data stok dan penjualan.' }}</span>
+                                            </div>
+                                            <span class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold {{ $recommendation['recommendation'] === 'Restock Segera' ? 'bg-orange-100 text-orange-800' : 'bg-emerald-100 text-emerald-800' }}">
+                                                {{ $recommendation['recommendation'] }}
+                                            </span>
+                                        </div>
+                                    @endforeach
                                 </div>
-                                <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                                    Unggulan
-                                </span>
-                            </div>
-
-                            <div class="p-3 rounded-xl bg-orange-50/60 border border-orange-100 flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-sm">
-                                        🍳
-                                    </div>
-                                    <div>
-                                        <p class="text-xs font-bold text-neutral-900">Minyak Sania Pouch 2L</p>
-                                        <span class="text-[10px] text-orange-600 font-medium">Sisa 8 pcs (Ambang Min: 12)</span>
-                                    </div>
+                            @else
+                                <div class="rounded-xl border border-neutral-100 bg-neutral-50 p-5 text-center">
+                                    <p class="text-xs text-neutral-600">Belum ada hasil TOPSIS yang tersimpan.</p>
+                                    <a href="{{ route('admin.topsis.calculate') }}" class="mt-2 inline-flex text-xs font-bold text-primary hover:underline">Hitung prioritas restock</a>
                                 </div>
-                                <span class="px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[10px] font-bold">
-                                    Restock Segera
-                                </span>
+                            @endif
+                        @else
+                            <div class="space-y-3 text-xs text-neutral-600">
+                                <p>Prioritas dihitung dari data toko menggunakan empat kriteria:</p>
+                                <ul class="space-y-2">
+                                    <li class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-primary"></span> Urgensi stok dibandingkan batas minimum</li>
+                                    <li class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-primary"></span> Kecepatan penjualan selama 30 hari</li>
+                                    <li class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-primary"></span> Lama pengadaan dari pemasok</li>
+                                    <li class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-primary"></span> Margin keuntungan produk</li>
+                                </ul>
                             </div>
-
-                            <div class="p-3 rounded-xl bg-neutral-50 border border-neutral-100 flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-lg bg-neutral-200 text-neutral-700 flex items-center justify-center font-bold text-sm">
-                                        📦
-                                    </div>
-                                    <div>
-                                        <p class="text-xs font-bold text-neutral-900">Deterjen Rinso 770g</p>
-                                        <span class="text-[10px] text-neutral-500">Margin tinggi 18.9%</span>
-                                    </div>
-                                </div>
-                                <span class="px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-700 text-[10px] font-bold">
-                                    Margin Bagus
-                                </span>
-                            </div>
-                        </div>
+                        @endif
 
                         <div class="mt-5 pt-4 border-t border-neutral-100 flex items-center justify-between text-xs">
                             <span class="text-neutral-500">Pilihan Terbaik & Berkualitas</span>

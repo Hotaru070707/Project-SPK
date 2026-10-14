@@ -26,6 +26,7 @@
                         <th class="p-3 text-right">Harga Jual</th>
                         <th class="p-3 text-center">Margin</th>
                         <th class="p-3 text-center">Stok Fisik</th>
+                        <th class="p-3 text-center">Pengadaan</th>
                         <th class="p-3 text-center font-mono">Barcode</th>
                         <th class="p-3 text-center">Aksi</th>
                     </tr>
@@ -75,6 +76,9 @@
                                     {{ $p->stock }} {{ $p->unit }}
                                 </span>
                             </td>
+                            <td class="p-3 text-center font-mono text-neutral-600">
+                                {{ $p->supplier_lead_time_days }} hari
+                            </td>
                             <td class="p-3 text-center font-mono text-[11px] text-neutral-600">
                                 {{ $p->barcode ?? '-' }}
                             </td>
@@ -101,7 +105,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="p-8 text-center text-neutral-400">
+                            <td colspan="10" class="p-8 text-center text-neutral-400">
                                 Belum ada produk. Klik tombol "Tambah Produk Baru" untuk menambahkan produk pertama.
                             </td>
                         </tr>
@@ -187,7 +191,7 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                     <label class="block font-bold text-neutral-700 mb-1">Stok Awal <span class="text-red-500">*</span></label>
                     <input type="number" name="stock" value="20" required min="0"
@@ -196,6 +200,11 @@
                 <div>
                     <label class="block font-bold text-neutral-700 mb-1">Stok Min <span class="text-red-500">*</span></label>
                     <input type="number" name="min_stock" value="5" required min="0"
+                           class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
+                </div>
+                <div>
+                    <label class="block font-bold text-neutral-700 mb-1">Lead Time (hari) <span class="text-red-500">*</span></label>
+                    <input type="number" name="supplier_lead_time_days" value="3" required min="0" max="365"
                            class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
                 </div>
                 <div>
@@ -299,7 +308,7 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                     <label class="block font-bold text-neutral-700 mb-1">Stok Fisik <span class="text-red-500">*</span></label>
                     <input type="number" name="stock" id="edit_stock" required min="0"
@@ -308,6 +317,11 @@
                 <div>
                     <label class="block font-bold text-neutral-700 mb-1">Stok Min <span class="text-red-500">*</span></label>
                     <input type="number" name="min_stock" id="edit_min_stock" required min="0"
+                           class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
+                </div>
+                <div>
+                    <label class="block font-bold text-neutral-700 mb-1">Lead Time (hari) <span class="text-red-500">*</span></label>
+                    <input type="number" name="supplier_lead_time_days" id="edit_supplier_lead_time_days" required min="0" max="365"
                            class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
                 </div>
                 <div>
@@ -321,6 +335,12 @@
                 <label class="block font-bold text-neutral-700 mb-1">Deskripsi Singkat</label>
                 <textarea name="description" id="edit_description" rows="2"
                           class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-emerald-500"></textarea>
+            </div>
+
+            <div>
+                <label for="edit_stock_change_reason" class="block font-bold text-neutral-700 mb-1">Alasan perubahan stok <span class="text-neutral-400 font-normal">(wajib jika stok berubah)</span></label>
+                <input type="text" name="stock_change_reason" id="edit_stock_change_reason" maxlength="255"
+                       class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500">
             </div>
 
             <div class="pt-3 border-t border-neutral-100 flex items-center justify-end gap-2">
@@ -374,6 +394,8 @@
         document.getElementById('edit_sell_price').value = Math.round(product.sell_price) || 0;
         document.getElementById('edit_stock').value = product.stock || 0;
         document.getElementById('edit_min_stock').value = product.min_stock || 0;
+        document.getElementById('edit_supplier_lead_time_days').value = product.supplier_lead_time_days ?? '';
+        document.getElementById('edit_stock_change_reason').value = '';
         document.getElementById('edit_unit').value = product.unit || 'pcs';
         document.getElementById('edit_description').value = product.description || '';
 
