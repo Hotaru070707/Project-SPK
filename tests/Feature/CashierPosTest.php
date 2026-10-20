@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -101,6 +103,86 @@ class CashierPosTest extends TestCase
         $this->assertSame(3, $product->fresh()->stock);
     }
 
+    public function test_cashier_sees_online_orders_regardless_of_payment_status(): void
+    {
+        $cashier = User::factory()->create([
+            'role' => 'cashier',
+            'is_active' => true,
+        ]);
+        $customer = User::factory()->create([
+            'role' => 'customer',
+            'is_active' => true,
+        ]);
+        $otherCashier = User::factory()->create([
+            'role' => 'cashier',
+            'is_active' => true,
+        ]);
+
+        $this->createOnlineOrder($customer, 'ONL-PAID-001', 'paid');
+        $this->createOnlineOrder($customer, 'ONL-UNPAID-001', 'unpaid');
+        Order::query()->create([
+            'order_number' => 'POS-OTHER-001',
+            'type' => 'offline',
+            'cashier_id' => $otherCashier->id,
+            'subtotal' => 100,
+            'discount' => 0,
+            'total' => 100,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'order_status' => 'completed',
+        ]);
+
+        $dashboard = $this->actingAs($cashier)->get(route('cashier.index'));
+
+        $dashboard->assertOk()
+            ->assertSee('ONL-PAID-001')
+            ->assertSee('ONL-UNPAID-001')
+            ->assertSee('PAID')
+            ->assertSee('UNPAID')
+            ->assertDontSee('POS-OTHER-001');
+
+        $history = $this->get(route('cashier.transactions'));
+
+        $history->assertOk()
+            ->assertSee('ONL-PAID-001')
+            ->assertSee('ONL-UNPAID-001')
+            ->assertSee('PAID')
+            ->assertSee('UNPAID')
+            ->assertDontSee('POS-OTHER-001');
+    }
+
+    public function test_cashier_pos_does_not_apply_legacy_member_discounts(): void
+    {
+        $cashier = User::factory()->create([
+            'role' => 'cashier',
+            'is_active' => true,
+        ]);
+        $customer = User::factory()->create([
+            'role' => 'customer',
+            'is_active' => true,
+        ]);
+        DB::table('users')->where('id', $customer->id)->update(['member_tier' => 'gold']);
+        $product = $this->createProductForCashier();
+
+        $this->actingAs($cashier)
+            ->postJson(route('cashier.store'), [
+                'items' => [['id' => $product->id, 'qty' => 2]],
+                'payment_method' => 'cash',
+                'customer_id' => $customer->id,
+                'cash_given' => 30000,
+                'idempotency_key' => (string) Str::uuid(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('discount', 0)
+            ->assertJsonPath('total', 30000);
+
+        $this->assertDatabaseHas('orders', [
+            'customer_id' => $customer->id,
+            'discount' => 0,
+            'total' => 30000,
+        ]);
+    }
+
     public function test_cashier_cannot_sell_more_than_available_stock(): void
     {
         $cashier = User::factory()->create([
@@ -161,5 +243,43 @@ class CashierPosTest extends TestCase
         $this->actingAs($cashier)
             ->get('/admin')
             ->assertForbidden();
+    }
+
+    private function createOnlineOrder(User $customer, string $orderNumber, string $paymentStatus): Order
+    {
+        return Order::query()->create([
+            'order_number' => $orderNumber,
+            'type' => 'online',
+            'customer_id' => $customer->id,
+            'subtotal' => 25000,
+            'discount' => 0,
+            'total' => 25000,
+            'payment_method' => 'midtrans_qris',
+            'payment_status' => $paymentStatus,
+            'order_status' => $paymentStatus === 'paid' ? 'processing' : 'pending_payment',
+            'midtrans_order_id' => $orderNumber,
+        ]);
+    }
+
+    private function createProductForCashier(): Product
+    {
+        $category = Category::query()->create([
+            'name' => 'Beras',
+            'slug' => 'beras',
+            'is_active' => true,
+        ]);
+
+        return Product::query()->create([
+            'category_id' => $category->id,
+            'name' => 'Beras Premium',
+            'slug' => 'beras-premium',
+            'barcode' => 'BR003',
+            'cost_price' => 10000,
+            'sell_price' => 15000,
+            'stock' => 5,
+            'min_stock' => 1,
+            'unit' => 'kg',
+            'is_active' => true,
+        ]);
     }
 }

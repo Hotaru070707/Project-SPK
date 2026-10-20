@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Product;
-use App\Models\TopsisResult;
 use Illuminate\Http\Request;
 
 class HomeController extends Controller
@@ -17,11 +16,8 @@ class HomeController extends Controller
             ->orderBy('stock', 'desc')
             ->take(8)
             ->get();
-        $latestTopsis = auth()->user()?->isOwner()
-            ? TopsisResult::query()->latest()->first()
-            : null;
 
-        return view('home.index', compact('categories', 'featuredProducts', 'latestTopsis'));
+        return view('customer.home.index', compact('categories', 'featuredProducts'));
     }
 
     public function catalog(Request $request)
@@ -60,7 +56,7 @@ class HomeController extends Controller
 
         $products = $query->paginate(12)->withQueryString();
 
-        return view('home.catalog', compact('categories', 'products'));
+        return view('customer.home.catalog', compact('categories', 'products'));
     }
 
     public function productDetail($slug)
@@ -71,16 +67,16 @@ class HomeController extends Controller
             ->take(4)
             ->get();
 
-        return view('home.detail', compact('product', 'relatedProducts'));
+        return view('customer.home.detail', compact('product', 'relatedProducts'));
     }
 
     public function about()
     {
-        return view('home.about');
+        return view('customer.home.about');
     }
 
     public function contact()
     {
-        return view('home.contact');
+        return view('customer.home.contact');
     }
 }

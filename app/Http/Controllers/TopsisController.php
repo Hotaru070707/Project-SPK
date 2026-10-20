@@ -20,7 +20,7 @@ class TopsisController extends Controller
         $criteria = TopsisCriterion::query()->orderBy('code')->get();
         $totalWeight = $criteria->sum('weight');
 
-        return view('admin.topsis.criteria', compact('criteria', 'totalWeight'));
+        return view('owner.topsis.criteria', compact('criteria', 'totalWeight'));
     }
 
     public function updateCriteria(Request $request): RedirectResponse
@@ -238,7 +238,7 @@ class TopsisController extends Controller
             'preferences' => $preferences,
         ]);
 
-        return view('admin.topsis.calculation', compact(
+        return view('owner.topsis.calculation', compact(
             'criteria',
             'matrixX',
             'matrixR',
@@ -260,6 +260,6 @@ class TopsisController extends Controller
         $preferences = $latestResult->preferences;
         $criteria = $latestResult->criteria_snapshot;
 
-        return view('admin.topsis.recommendations', compact('preferences', 'criteria', 'latestResult'));
+        return view('owner.topsis.recommendations', compact('preferences', 'criteria', 'latestResult'));
     }
 }

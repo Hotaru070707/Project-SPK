@@ -28,9 +28,9 @@ Route::middleware(RedirectOwnerFromStorefront::class)->group(function () {
     Route::post('/akun/checkout', [CartController::class, 'processCheckout'])->name('cart.checkout.process');
 
     Route::get('/akun/pesanan/{orderNumber}', [OrderController::class, 'show'])->name('orders.show');
-    Route::post('/akun/pesanan/{orderNumber}/bukti', [OrderController::class, 'uploadProof'])->name('orders.uploadProof');
-    Route::post('/akun/pesanan/{orderNumber}/simulasi-bayar', [OrderController::class, 'simulatePaid'])->name('orders.simulatePaid');
 });
+
+Route::post('/midtrans/notification', [OrderController::class, 'midtransNotification'])->name('midtrans.notification');
 
 Route::get('/tentang', [HomeController::class, 'about'])->name('about');
 Route::get('/kontak', [HomeController::class, 'contact'])->name('contact');

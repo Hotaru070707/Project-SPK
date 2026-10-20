@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ $title ?? 'Mobeli - Toko Kelontong Modern & SPK TOPSIS' }}</title>
+    <title>{{ $title ?? 'Mobeli - Toko Kelontong Modern' }}</title>
     <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
     
     <!-- Google Fonts -->
@@ -121,7 +121,7 @@
 
     <!-- Main Navigation Header -->
     <header class="bg-white/95 backdrop-blur-md sticky top-0 z-50 border-b border-neutral-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between gap-4">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-18 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
             <!-- Brand Logo -->
             <div class="flex items-center gap-2 sm:gap-3">
                 <button onclick="window.history.back()" class="p-2 -ml-2 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded-lg transition" title="Kembali">
@@ -138,16 +138,14 @@
             </a>
             </div>
 
-            <!-- Search Form - Removed from header based on user request -->
+            <nav aria-label="Navigasi toko" class="order-3 flex w-full items-center gap-4 overflow-x-auto whitespace-nowrap border-t border-neutral-100 pt-2 text-sm md:order-none md:w-auto md:border-t-0 md:pt-0">
+                <a href="{{ route('home') }}" class="font-medium text-neutral-700 hover:text-primary transition">Beranda</a>
+                <a href="{{ route('about') }}" class="font-medium text-neutral-700 hover:text-primary transition">Tentang Kami</a>
+                <a href="{{ route('contact') }}" class="font-medium text-neutral-700 hover:text-primary transition">Hubungi Kami</a>
+            </nav>
 
             <!-- Nav Actions & User Info -->
             <div class="flex items-center gap-3">
-                @if(!auth()->check() || !auth()->user()->isOwner())
-                    <a href="{{ url('/produk') }}" class="text-sm font-medium text-neutral-700 hover:text-primary transition hidden sm:inline-flex items-center gap-1">
-                        <i data-lucide="grid" class="w-4 h-4"></i> Katalog
-                    </a>
-                @endif
-
                 @auth
                     @if(auth()->user()->isOwner())
                         <a href="{{ url('/admin') }}" class="px-3 py-1.5 rounded-lg bg-neutral-900 text-white text-xs font-semibold hover:bg-neutral-800 transition flex items-center gap-1.5">
@@ -210,24 +208,7 @@
         </div>
     </header>
 
-    <!-- Flash Notifications -->
-    @if(session('success'))
-        <div class="max-w-7xl mx-auto px-4 mt-4 w-full">
-            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm flex items-center gap-3">
-                <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600 shrink-0"></i>
-                <span class="font-medium">{{ session('success') }}</span>
-            </div>
-        </div>
-    @endif
-
-    @if(session('error'))
-        <div class="max-w-7xl mx-auto px-4 mt-4 w-full">
-            <div class="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-sm flex items-center gap-3">
-                <i data-lucide="alert-triangle" class="w-5 h-5 text-red-600 shrink-0"></i>
-                <span class="font-medium">{{ session('error') }}</span>
-            </div>
-        </div>
-    @endif
+    @include('partials.flash-toast')
 
     <!-- Main Content Slot -->
     <main class="flex-1">
@@ -237,7 +218,7 @@
     <!-- Footer -->
     <footer class="bg-neutral-900 text-neutral-300 pt-12 pb-8 border-t border-neutral-800 mt-16 text-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
                 <div class="space-y-3">
                     <div class="flex items-center gap-2 text-white font-heading font-bold text-lg">
                         <span class="w-7 h-7 rounded-lg bg-primary text-white flex items-center justify-center text-sm font-extrabold">M</span>
@@ -245,7 +226,7 @@
                     </div>
                     @if(!request()->is('login', 'daftar', 'masuk'))
                     <p class="text-xs text-neutral-400 leading-relaxed">
-                        Sistem Informasi Toko Kelontong Modern dengan integrasi POS Kasir, Toko Online, dan Analisis Keputusan Cerdas Metode TOPSIS.
+                        Toko kelontong modern untuk kebutuhan harian dengan layanan belanja online dan kasir yang praktis.
                     </p>
                     @endif
                     <div class="text-xs text-neutral-400">
@@ -255,20 +236,6 @@
                 </div>
 
                 @if(!request()->is('login', 'daftar', 'masuk'))
-
-                <div>
-                    <h4 class="font-heading font-semibold text-white text-xs uppercase tracking-wider mb-3">Navigasi Toko</h4>
-                    <ul class="space-y-2 text-xs">
-                        <li><a href="{{ url('/') }}" class="hover:text-white transition">Beranda Utama</a></li>
-                        @if(!auth()->check() || !auth()->user()->isOwner())
-                            <li><a href="{{ url('/produk') }}" class="hover:text-white transition">Katalog Produk Lengkap</a></li>
-                            <li><a href="{{ url('/produk?kategori=sembako') }}" class="hover:text-white transition">Sembako & Kebutuhan Pokok</a></li>
-                        @endif
-                        <li><a href="{{ url('/tentang') }}" class="hover:text-white transition">Tentang Kami</a></li>
-                        <li><a href="{{ url('/kontak') }}" class="hover:text-white transition">Hubungi Kami</a></li>
-                    </ul>
-                </div>
-
                 <div>
                     <h4 class="font-heading font-semibold text-white text-xs uppercase tracking-wider mb-3">Metode Pembayaran</h4>
                     <p class="text-xs text-neutral-400 mb-3">Mendukung QRIS, GoPay, Transfer Bank BRI, dan Tunai di Kasir.</p>

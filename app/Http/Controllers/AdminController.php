@@ -59,7 +59,7 @@ class AdminController extends Controller
 
         $latestTopsis = TopsisResult::latest()->first();
 
-        return view('admin.dashboard', compact(
+        return view('owner.dashboard', compact(
             'totalProducts',
             'totalStockUnits',
             'lowStockProducts',
@@ -76,7 +76,7 @@ class AdminController extends Controller
         $products = Product::with('category')->latest()->paginate(15);
         $categories = Category::all();
 
-        return view('admin.products.index', compact('products', 'categories'));
+        return view('owner.products.index', compact('products', 'categories'));
     }
 
     public function storeProduct(Request $request): RedirectResponse
@@ -197,7 +197,7 @@ class AdminController extends Controller
     {
         $categories = Category::withCount('products')->get();
 
-        return view('admin.categories.index', compact('categories'));
+        return view('owner.categories.index', compact('categories'));
     }
 
     public function storeCategory(Request $request): RedirectResponse
@@ -217,7 +217,7 @@ class AdminController extends Controller
     {
         $orders = Order::with(['customer', 'items.product'])->latest()->paginate(15);
 
-        return view('admin.orders.index', compact('orders'));
+        return view('owner.orders.index', compact('orders'));
     }
 
     public function verifyOrder(Request $request, int $id): RedirectResponse
@@ -247,7 +247,7 @@ class AdminController extends Controller
     {
         $customers = User::where('role', 'customer')->withCount('orders')->get();
 
-        return view('admin.customers.index', compact('customers'));
+        return view('owner.customers.index', compact('customers'));
     }
 
     public function stockMovements(): View
@@ -258,7 +258,7 @@ class AdminController extends Controller
             ->latest()
             ->paginate(20);
 
-        return view('admin.stock.index', compact('products', 'movements'));
+        return view('owner.stock.index', compact('products', 'movements'));
     }
 
     public function storeStockMovement(Request $request): RedirectResponse
@@ -341,7 +341,7 @@ class AdminController extends Controller
             ->limit(20)
             ->get();
 
-        return view('admin.reports.index', compact(
+        return view('owner.reports.index', compact(
             'startDate',
             'endDate',
             'orders',
@@ -390,7 +390,7 @@ class AdminController extends Controller
             ->orderBy('name')
             ->paginate(20);
 
-        return view('admin.users.index', compact('cashiers'));
+        return view('owner.users.index', compact('cashiers'));
     }
 
     public function storeCashier(Request $request): RedirectResponse

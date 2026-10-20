@@ -58,14 +58,14 @@
             </button>
         </div>
 
-        <!-- Member Selector for Auto Discount -->
+        <!-- Customer Selector -->
         <div class="p-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-xs">
-            <span class="text-slate-500 font-medium text-[11px]">Member:</span>
-            <select id="memberSelect" onchange="calculatePosTotal()" class="flex-1 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                <option value="0" data-tier="none">Pelanggan Umum (Tanpa Diskon)</option>
-                @foreach($members as $m)
-                    <option value="{{ $m->id }}" data-tier="{{ $m->member_tier }}">
-                        {{ $m->name }} ({{ strtoupper($m->member_tier) }} - {{ $m->member_tier === 'gold' ? '5%' : ($m->member_tier === 'silver' ? '3%' : '0%') }})
+            <label for="customerSelect" class="text-slate-500 font-medium text-[11px]">Pelanggan:</label>
+            <select id="customerSelect" class="flex-1 bg-white border border-slate-300 rounded px-2 py-1 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                <option value="0">Pelanggan Umum</option>
+                @foreach($customers as $customer)
+                    <option value="{{ $customer->id }}">
+                        {{ $customer->name }}
                     </option>
                 @endforeach
             </select>
@@ -85,10 +85,6 @@
             <div class="flex justify-between text-slate-600">
                 <span>Subtotal Barang:</span>
                 <span class="font-bold text-slate-900 price-font" id="posSubtotal">Rp 0</span>
-            </div>
-            <div class="flex justify-between text-emerald-700 font-semibold" id="posDiscountRow">
-                <span>Diskon Member:</span>
-                <span class="price-font" id="posDiscount">- Rp 0</span>
             </div>
             <div class="pt-2 border-t border-slate-200 flex justify-between items-baseline">
                 <span class="text-sm font-black text-slate-900">TOTAL BAYAR:</span>
@@ -163,7 +159,7 @@
 
         <div class="text-[10px] space-y-0.5 border-b border-dashed border-slate-300 pb-2">
             <div class="flex justify-between"><span id="rcInvoice">INV: POS-...</span><span id="rcDate">...</span></div>
-            <div class="flex justify-between"><span>Kasir: {{ auth()->user()->name }}</span><span id="rcMember">Umum</span></div>
+            <div class="flex justify-between"><span>Kasir: {{ auth()->user()->name }}</span><span id="rcCustomer">Pelanggan Umum</span></div>
         </div>
 
         <div id="rcItems" class="space-y-1 py-1 max-h-48 overflow-y-auto border-b border-dashed border-slate-300">
@@ -172,7 +168,6 @@
 
         <div class="space-y-1 text-[11px] pt-1 border-b border-dashed border-slate-300 pb-2">
             <div class="flex justify-between"><span>Subtotal:</span><span id="rcSubtotal">Rp 0</span></div>
-            <div class="flex justify-between"><span>Diskon:</span><span id="rcDiscount">Rp 0</span></div>
             <div class="flex justify-between font-bold text-slate-900"><span>TOTAL:</span><span id="rcTotal">Rp 0</span></div>
             <div class="flex justify-between"><span>Bayar (<span id="rcMethod">CASH</span>):</span><span id="rcPay">Rp 0</span></div>
             <div class="flex justify-between font-bold"><span>Kembalian:</span><span id="rcChange">Rp 0</span></div>
@@ -247,7 +242,6 @@
                 </div>`;
             document.getElementById('btnPay').disabled = true;
             document.getElementById('posSubtotal').innerText = 'Rp 0';
-            document.getElementById('posDiscount').innerText = '- Rp 0';
             document.getElementById('posTotal').innerText = 'Rp 0';
             lucide.createIcons();
             return;
@@ -282,17 +276,9 @@
 
     function calculatePosTotal() {
         let subtotal = posCart.reduce((sum, i) => sum + (i.price * i.qty), 0);
-        let memberSelect = document.getElementById('memberSelect');
-        let tier = memberSelect.options[memberSelect.selectedIndex].getAttribute('data-tier') || 'none';
-        
-        let discount = 0;
-        if (tier === 'gold') discount = subtotal * 0.05;
-        else if (tier === 'silver') discount = subtotal * 0.03;
-
-        currentTotal = Math.max(0, subtotal - discount);
+        currentTotal = subtotal;
 
         document.getElementById('posSubtotal').innerText = 'Rp ' + subtotal.toLocaleString('id-ID');
-        document.getElementById('posDiscount').innerText = '- Rp ' + discount.toLocaleString('id-ID');
         document.getElementById('posTotal').innerText = 'Rp ' + currentTotal.toLocaleString('id-ID');
         document.getElementById('modalTotalPay').innerText = 'Rp ' + currentTotal.toLocaleString('id-ID');
     }
@@ -345,8 +331,8 @@
     }
 
     async function submitPosTransaction() {
-        let memberSelect = document.getElementById('memberSelect');
-        let customerId = memberSelect.value !== "0" ? memberSelect.value : null;
+        let customerSelect = document.getElementById('customerSelect');
+        let customerId = customerSelect.value !== "0" ? customerSelect.value : null;
         let cashGiven = parseFloat(document.getElementById('cashGiven').value) || 0;
 
         if (currentMethod === 'cash' && cashGiven < currentTotal) {
@@ -398,9 +384,8 @@
     function showReceipt(data) {
         document.getElementById('rcInvoice').innerText = data.order_number;
         document.getElementById('rcDate').innerText = new Date().toLocaleTimeString('id-ID');
-        document.getElementById('rcMember').innerText = data.customer_name;
+        document.getElementById('rcCustomer').innerText = data.customer_name;
         document.getElementById('rcSubtotal').innerText = 'Rp ' + data.subtotal.toLocaleString('id-ID');
-        document.getElementById('rcDiscount').innerText = '- Rp ' + data.discount.toLocaleString('id-ID');
         document.getElementById('rcTotal').innerText = 'Rp ' + data.total.toLocaleString('id-ID');
         document.getElementById('rcMethod').innerText = 'TUNAI';
         document.getElementById('rcPay').innerText = 'Rp ' + data.cash_given.toLocaleString('id-ID');

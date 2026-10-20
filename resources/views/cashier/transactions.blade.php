@@ -1,11 +1,11 @@
-@extends('layouts.cashier', ['title' => 'Riwayat Transaksi Kasir - Mobeli'])
+@extends('layouts.cashier', ['title' => 'Riwayat Pesanan & Transaksi - Mobeli'])
 
 @section('content')
 <div class="py-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full space-y-6">
     <div class="border-b border-slate-200 pb-4 flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold font-heading text-slate-900 tracking-tight">Riwayat Transaksi Offline POS</h1>
-            <p class="text-xs text-slate-500 mt-1">Daftar struk transaksi penjualan kasir offline.</p>
+            <h1 class="text-2xl font-bold font-heading text-slate-900 tracking-tight">Riwayat Pesanan & Transaksi</h1>
+            <p class="text-xs text-slate-500 mt-1">Daftar pesanan online pelanggan dan transaksi kasir.</p>
         </div>
         <a href="{{ route('cashier.pos') }}" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition">
             + Transaksi Baru
@@ -19,12 +19,15 @@
                     <tr>
                         <th class="p-3">No. Struk</th>
                         <th class="p-3">Waktu</th>
+                        <th class="p-3 text-center">Tipe</th>
                         <th class="p-3">Pelanggan</th>
                         <th class="p-3">Item Belanja</th>
                         <th class="p-3 text-right">Subtotal</th>
                         <th class="p-3 text-right">Diskon</th>
                         <th class="p-3 text-right">Total</th>
                         <th class="p-3 text-center">Metode</th>
+                        <th class="p-3 text-center">Pembayaran</th>
+                        <th class="p-3 text-center">Pesanan</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -32,6 +35,7 @@
                         <tr class="hover:bg-slate-50">
                             <td class="p-3 font-mono font-bold text-slate-900">{{ $o->order_number }}</td>
                             <td class="p-3 text-slate-500">{{ $o->created_at->format('d/m/Y H:i') }}</td>
+                            <td class="p-3 text-center">{{ strtoupper($o->type) }}</td>
                             <td class="p-3 font-medium">{{ $o->customer->name ?? 'Pelanggan Umum' }}</td>
                             <td class="p-3 text-slate-600">
                                 @foreach($o->items as $it)
@@ -50,11 +54,15 @@
                                     {{ $o->payment_method }}
                                 </span>
                             </td>
+                            <td class="p-3 text-center font-bold {{ $o->payment_status === 'paid' ? 'text-emerald-700' : 'text-amber-700' }}">
+                                {{ strtoupper($o->payment_status) }}
+                            </td>
+                            <td class="p-3 text-center">{{ strtoupper($o->order_status) }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="p-8 text-center text-slate-400">
-                                Belum ada transaksi kasir.
+                            <td colspan="11" class="p-8 text-center text-slate-400">
+                                Belum ada pesanan online atau transaksi kasir.
                             </td>
                         </tr>
                     @endforelse

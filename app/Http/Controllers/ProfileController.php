@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -13,9 +12,9 @@ class ProfileController extends Controller
     public function edit()
     {
         $user = Auth::user();
-        
-        $layout = match($user->role) {
-            'owner' => 'layouts.admin',
+
+        $layout = match ($user->role) {
+            'owner' => 'layouts.owner',
             'cashier' => 'layouts.cashier',
             default => 'layouts.app',
         };
@@ -46,14 +45,14 @@ class ProfileController extends Controller
         ]);
 
         // Clean phone number (simpan format +628...)
-        if (!empty($validated['phone'])) {
+        if (! empty($validated['phone'])) {
             $cleanPhone = preg_replace('/[^0-9]/', '', $validated['phone']);
             if (str_starts_with($cleanPhone, '0')) {
                 $cleanPhone = substr($cleanPhone, 1);
             } elseif (str_starts_with($cleanPhone, '62')) {
                 $cleanPhone = substr($cleanPhone, 2);
             }
-            $validated['phone'] = '+62' . $cleanPhone;
+            $validated['phone'] = '+62'.$cleanPhone;
         }
 
         if ($request->hasFile('avatar')) {

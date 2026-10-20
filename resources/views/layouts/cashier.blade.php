@@ -142,6 +142,8 @@
         </div>
     </header>
 
+    @include('partials.flash-toast')
+
     <main class="flex-1 flex flex-col">
         @yield('content')
     </main>

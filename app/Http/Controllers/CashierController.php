@@ -20,24 +20,42 @@ class CashierController extends Controller
 {
     public function index()
     {
-        $todayOrders = Order::where('cashier_id', Auth::id())
+        $todayOrders = Order::query()
+            ->where('type', 'offline')
+            ->where('cashier_id', Auth::id())
             ->whereDate('created_at', Carbon::today())
             ->get();
 
         $totalOmsetToday = $todayOrders->where('payment_status', 'paid')->sum('total');
         $totalTrxToday = $todayOrders->count();
+        $recentOrders = Order::query()
+            ->where(function ($query): void {
+                $query->where('type', 'online')
+                    ->orWhere(function ($query): void {
+                        $query->where('type', 'offline')
+                            ->where('cashier_id', Auth::id());
+                    });
+            })
+            ->with('customer')
+            ->latest()
+            ->take(6)
+            ->get();
 
-        return view('cashier.index', compact('totalOmsetToday', 'totalTrxToday', 'todayOrders'));
+        return view('cashier.index', compact('totalOmsetToday', 'totalTrxToday', 'recentOrders'));
     }
 
     public function pos()
     {
         $products = Product::where('is_active', true)->with('category')->get();
-        $members = User::where('role', 'customer')->get();
+        $customers = User::query()
+            ->where('role', 'customer')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $transactionKey = (string) Str::uuid();
         $cashierId = Auth::id();
 
-        return view('cashier.pos', compact('products', 'members', 'transactionKey', 'cashierId'));
+        return view('cashier.pos', compact('products', 'customers', 'transactionKey', 'cashierId'));
     }
 
     public function storeTransaction(Request $request)
@@ -110,13 +128,8 @@ class CashierController extends Controller
                     ? User::query()->whereKey($validated['customer_id'])->where('role', 'customer')->firstOrFail()
                     : null;
                 $subtotal = $items->sum(fn (array $item): float => (float) $products[$item['id']]->sell_price * $item['qty']);
-                $discountRate = match ($customer?->member_tier) {
-                    'gold' => 0.05,
-                    'silver' => 0.03,
-                    default => 0.0,
-                };
-                $discount = round($subtotal * $discountRate, 2);
-                $total = round(max(0, $subtotal - $discount), 2);
+                $discount = 0;
+                $total = round($subtotal, 2);
                 $cashGiven = (float) $validated['cash_given'];
                 if ($cashGiven < $total) {
                     throw ValidationException::withMessages([
@@ -209,10 +222,16 @@ class CashierController extends Controller
 
     public function transactions()
     {
-        $query = Order::query()->where('type', 'offline');
-        if (Auth::user()->isCashier()) {
-            $query->where('cashier_id', Auth::id());
-        }
+        $query = Order::query()
+            ->where(function ($query): void {
+                $query->where('type', 'online')
+                    ->orWhere(function ($query): void {
+                        $query->where('type', 'offline');
+                        if (Auth::user()->isCashier()) {
+                            $query->where('cashier_id', Auth::id());
+                        }
+                    });
+            });
         $orders = $query->with(['items', 'customer'])->latest()->paginate(15);
 
         return view('cashier.transactions', compact('orders'));

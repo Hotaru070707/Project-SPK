@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Product;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\Promo;
+use App\Models\Product;
+use App\Services\MidtransSnapService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class CartController extends Controller
 {
@@ -20,11 +21,20 @@ class CartController extends Controller
             $subtotal += $item['price'] * $item['qty'];
         }
 
-        return view('cart.index', compact('cart', 'subtotal'));
+        return view('customer.cart.index', compact('cart', 'subtotal'));
     }
 
     public function add(Request $request)
     {
+        $user = $request->user();
+
+        if (! $user) {
+            return redirect()->route('login')
+                ->with('error', 'Silakan masuk sebagai pelanggan terlebih dahulu untuk menambahkan produk ke keranjang.');
+        }
+
+        abort_unless($user->isCustomer(), 403, 'Hanya pelanggan yang dapat menambahkan produk ke keranjang.');
+
         $request->validate([
             'product_id' => 'required|exists:products,id',
             'qty' => 'required|integer|min:1',
@@ -100,10 +110,10 @@ class CartController extends Controller
             $subtotal += $item['price'] * $item['qty'];
         }
 
-        return view('cart.checkout', compact('cart', 'subtotal'));
+        return view('customer.cart.checkout', compact('cart', 'subtotal'));
     }
 
-    public function processCheckout(Request $request)
+    public function processCheckout(Request $request, MidtransSnapService $midtrans)
     {
         $cart = session()->get('cart', []);
         if (empty($cart)) {
@@ -114,7 +124,7 @@ class CartController extends Controller
             'recipient_name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
             'notes' => 'nullable|string|max:500',
-            'payment_method' => 'required|in:manual_transfer,midtrans_qris,cash',
+            'payment_method' => 'required|in:midtrans_qris,cash',
         ]);
 
         $subtotal = 0;
@@ -122,22 +132,13 @@ class CartController extends Controller
             $subtotal += $item['price'] * $item['qty'];
         }
 
-        // Apply member discount if logged in
         $discount = 0;
-        if (Auth::check()) {
-            $user = Auth::user();
-            if ($user->member_tier === 'gold') {
-                $discount = $subtotal * 0.05; // 5%
-            } elseif ($user->member_tier === 'silver') {
-                $discount = $subtotal * 0.03; // 3%
-            }
-        }
-
-        $total = max(0, $subtotal - $discount);
-        $orderNumber = 'ONL-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4));
+        $total = (int) round($subtotal);
+        $orderNumber = 'ONL-'.date('Ymd').'-'.strtoupper(Str::random(8));
+        $midtransRedirectUrl = null;
 
         $orderNotes = "Pemesan: {$request->recipient_name} ({$request->phone})";
-        if (!empty($request->notes)) {
+        if (! empty($request->notes)) {
             $orderNotes .= " | Catatan: {$request->notes}";
         }
 
@@ -153,6 +154,7 @@ class CartController extends Controller
                 'payment_method' => $request->payment_method,
                 'payment_status' => $request->payment_method === 'cash' ? 'pending' : 'unpaid',
                 'order_status' => 'pending_payment',
+                'midtrans_order_id' => $request->payment_method === 'midtrans_qris' ? $orderNumber : null,
                 'notes' => $orderNotes,
             ]);
 
@@ -174,17 +176,34 @@ class CartController extends Controller
                 }
             }
 
+            if ($request->payment_method === 'midtrans_qris') {
+                $payment = $midtrans->createTransaction($order, $request->recipient_name, $request->phone);
+                $midtransRedirectUrl = $payment['redirect_url'];
+
+                $order->update([
+                    'midtrans_token' => $payment['token'],
+                    'midtrans_payload' => ['redirect_url' => $payment['redirect_url']],
+                ]);
+            }
+
             DB::commit();
 
             // Clear Cart
             session()->forget('cart');
             session()->forget('cart_count');
 
+            if ($midtransRedirectUrl !== null) {
+                return redirect()->away($midtransRedirectUrl);
+            }
+
             return redirect()->route('orders.show', $order->order_number)
                 ->with('success', "Pesanan #{$order->order_number} berhasil dibuat!");
         } catch (\Exception $e) {
             DB::rollBack();
-            return back()->with('error', 'Gagal memproses pesanan: ' . $e->getMessage());
+
+            report($e);
+
+            return back()->with('error', 'Pesanan gagal dibuat. Periksa konfigurasi Midtrans atau coba kembali.');
         }
     }
 }

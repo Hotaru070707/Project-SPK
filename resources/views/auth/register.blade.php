@@ -6,7 +6,7 @@
         <div class="text-center mb-8">
             <img src="{{ asset('images/logo.png') }}" alt="Mobeli Logo" class="w-16 h-16 rounded-2xl object-cover shadow-md mb-3 mx-auto">
             <h1 class="text-2xl font-bold font-heading text-neutral-900 tracking-tight">Daftar Akun Pelanggan</h1>
-            <p class="text-sm text-neutral-500 mt-1">Dapatkan poin belanja, tier member, dan diskon eksklusif sembako.</p>
+            <p class="text-sm text-neutral-500 mt-1">Buat akun untuk memesan kebutuhan harian dengan lebih mudah.</p>
         </div>
 
         <div class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6 sm:p-8">

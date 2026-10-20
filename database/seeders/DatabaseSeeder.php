@@ -24,8 +24,6 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('password123'),
             'phone' => '081234567890',
             'role' => 'owner',
-            'member_tier' => 'none',
-            'loyalty_points' => 0,
             'is_active' => true,
         ]);
 
@@ -34,8 +32,6 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('password123'),
             'phone' => '082198765432',
             'role' => 'cashier',
-            'member_tier' => 'none',
-            'loyalty_points' => 0,
             'is_active' => true,
         ]);
 
@@ -44,8 +40,6 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('password123'),
             'phone' => '081377889900',
             'role' => 'customer',
-            'member_tier' => 'silver',
-            'loyalty_points' => 150,
             'is_active' => true,
         ]);
 
@@ -54,8 +48,6 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('password123'),
             'phone' => '085711223344',
             'role' => 'customer',
-            'member_tier' => 'gold',
-            'loyalty_points' => 420,
             'is_active' => true,
         ]);
 
@@ -355,8 +347,8 @@ class DatabaseSeeder extends Seeder
             'cashier_id' => $cashier->id,
             'customer_id' => $customer1->id,
             'subtotal' => 108500,
-            'discount' => 3255, // Diskon silver member 3%
-            'total' => 105245,
+            'discount' => 0,
+            'total' => 108500,
             'payment_method' => 'cash',
             'payment_status' => 'paid',
             'order_status' => 'completed',

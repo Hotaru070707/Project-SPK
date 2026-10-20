@@ -2,47 +2,68 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Order;
-use Illuminate\Support\Facades\Storage;
+use App\Services\MidtransSnapService;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use InvalidArgumentException;
+use RuntimeException;
 
 class OrderController extends Controller
 {
-    public function show($orderNumber)
-    {
+    public function show(
+        Request $request,
+        string $orderNumber,
+        MidtransSnapService $midtrans
+    ): View {
         $order = Order::where('order_number', $orderNumber)->with(['items.product', 'customer'])->firstOrFail();
-        return view('orders.show', compact('order'));
-    }
 
-    public function uploadProof(Request $request, $orderNumber)
-    {
-        $order = Order::where('order_number', $orderNumber)->firstOrFail();
+        if (
+            $request->boolean('midtrans_return')
+            && $order->payment_method === 'midtrans_qris'
+            && $order->payment_status !== 'paid'
+        ) {
+            try {
+                $midtrans->syncOrderStatus($order);
+            } catch (RuntimeException $exception) {
+                report($exception);
+            }
 
-        $request->validate([
-            'payment_proof' => 'required|image|mimes:jpeg,png,jpg|max:3072',
-        ]);
-
-        if ($request->hasFile('payment_proof')) {
-            $path = $request->file('payment_proof')->store('payment_proofs', 'public');
-            $order->update([
-                'payment_proof' => $path,
-                'payment_status' => 'pending', // Menunggu verifikasi admin
-            ]);
+            $order->refresh();
         }
 
-        return redirect()->back()->with('success', 'Bukti pembayaran berhasil diunggah! Admin akan segera memverifikasi pesanan Anda.');
+        return view('customer.orders.show', compact('order'));
     }
 
-    public function simulatePaid($orderNumber)
+    public function midtransNotification(Request $request, MidtransSnapService $midtrans): JsonResponse
     {
-        // Fitur simulasi bayar instan untuk demo/testing
-        $order = Order::where('order_number', $orderNumber)->firstOrFail();
-        $order->update([
-            'payment_status' => 'paid',
-            'order_status' => 'processing',
-            'paid_at' => now(),
+        $validator = Validator::make($request->all(), [
+            'order_id' => ['required', 'string'],
+            'status_code' => ['required', 'string'],
+            'gross_amount' => ['required', 'string'],
+            'signature_key' => ['required', 'string'],
+            'transaction_status' => ['required', 'string'],
+            'fraud_status' => ['nullable', 'string'],
         ]);
 
-        return redirect()->back()->with('success', 'Simulasi pembayaran sukses! Status pesanan kini telah LUNAS (PAID).');
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Invalid notification payload.'], 422);
+        }
+
+        try {
+            $processed = $midtrans->handleNotification($validator->validated());
+        } catch (InvalidArgumentException) {
+            return response()->json(['message' => 'Invalid signature.'], 403);
+        } catch (RuntimeException) {
+            return response()->json(['message' => 'Payment integration is not configured.'], 503);
+        }
+
+        if (! $processed) {
+            return response()->json(['message' => 'Order or payment amount not found.'], 404);
+        }
+
+        return response()->json(['message' => 'Notification processed.']);
     }
 }

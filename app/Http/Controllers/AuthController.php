@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use App\Models\User;
 
 class AuthController extends Controller
 {
@@ -31,12 +31,14 @@ class AuthController extends Controller
             $request->session()->regenerate();
             $user = Auth::user();
 
-            if (!$user->is_active) {
+            if (! $user->is_active) {
                 Auth::logout();
+
                 return back()->withErrors(['email' => 'Akun Anda dinonaktifkan oleh administrator.']);
             }
 
-            return $this->redirectBasedOnRole($user);
+            return $this->redirectBasedOnRole($user)
+                ->with('success', "Login berhasil. Selamat datang kembali, {$user->name}!");
         }
 
         return back()->withErrors([
@@ -68,8 +70,6 @@ class AuthController extends Controller
             'phone' => $validated['phone'],
             'password' => Hash::make($validated['password']),
             'role' => 'customer',
-            'member_tier' => 'bronze',
-            'loyalty_points' => 10, // Bonus daftar
             'is_active' => true,
         ]);
 
@@ -96,6 +96,6 @@ class AuthController extends Controller
             return redirect()->intended('/kasir');
         }
 
-        return redirect()->intended('/');
+        return redirect()->route('home');
     }
 }
