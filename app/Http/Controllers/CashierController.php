@@ -8,7 +8,9 @@ use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -235,6 +237,89 @@ class CashierController extends Controller
         $orders = $query->with(['items', 'customer'])->latest()->paginate(15);
 
         return view('cashier.transactions', compact('orders'));
+    }
+
+    public function showOrder(Order $order): View
+    {
+        abort_unless($order->type === 'online', 404);
+
+        $order->load(['items.product', 'customer', 'address', 'cashier']);
+
+        $paymentStatusLabels = [
+            'unpaid' => 'Belum Dibayar',
+            'pending' => 'Menunggu Pembayaran',
+            'paid' => 'Lunas',
+            'expired' => 'Kedaluwarsa',
+            'refunded' => 'Dikembalikan',
+        ];
+        $orderStatusLabels = [
+            'pending_payment' => 'Menunggu Pembayaran',
+            'processing' => 'Sedang Diproses',
+            'packed' => 'Siap Diambil',
+            'shipped' => 'Dikirim',
+            'completed' => 'Selesai',
+            'cancelled' => 'Dibatalkan',
+            'void' => 'Void',
+        ];
+
+        return view('cashier.orders.show', compact('order', 'paymentStatusLabels', 'orderStatusLabels'));
+    }
+
+    public function markOrderReadyForPickup(Order $order): RedirectResponse
+    {
+        $error = $this->transitionOnlineOrder($order, 'processing', 'packed');
+
+        if ($error !== null) {
+            return redirect()->route('cashier.orders.show', $order->order_number)->with('error', $error);
+        }
+
+        return redirect()->route('cashier.orders.show', $order->order_number)
+            ->with('success', 'Pesanan berhasil ditandai siap diambil.');
+    }
+
+    public function completeOnlineOrder(Order $order): RedirectResponse
+    {
+        $error = $this->transitionOnlineOrder($order, 'packed', 'completed', (int) Auth::id());
+
+        if ($error !== null) {
+            return redirect()->route('cashier.orders.show', $order->order_number)->with('error', $error);
+        }
+
+        return redirect()->route('cashier.orders.show', $order->order_number)
+            ->with('success', 'Penyerahan berhasil dikonfirmasi dan pesanan telah selesai.');
+    }
+
+    private function transitionOnlineOrder(
+        Order $order,
+        string $expectedStatus,
+        string $nextStatus,
+        ?int $cashierId = null
+    ): ?string {
+        return DB::transaction(function () use ($order, $expectedStatus, $nextStatus, $cashierId): ?string {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+            if ($lockedOrder->type !== 'online') {
+                return 'Aksi ini hanya tersedia untuk pesanan online.';
+            }
+
+            if ($lockedOrder->payment_status !== 'paid') {
+                return 'Pembayaran belum dikonfirmasi. Pesanan tidak dapat diproses.';
+            }
+
+            if ($lockedOrder->order_status !== $expectedStatus) {
+                return 'Status pesanan sudah berubah atau tidak sesuai untuk tindakan ini.';
+            }
+
+            $attributes = ['order_status' => $nextStatus];
+
+            if ($cashierId !== null) {
+                $attributes['cashier_id'] = $cashierId;
+            }
+
+            $lockedOrder->update($attributes);
+
+            return null;
+        });
     }
 
     private function receiptPayload(Order $order): array

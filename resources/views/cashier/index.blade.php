@@ -59,6 +59,7 @@
                         <th class="p-3 text-center">Metode</th>
                         <th class="p-3 text-center">Pembayaran</th>
                         <th class="p-3 text-center">Pesanan</th>
+                        <th class="p-3 text-center">Aksi</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -87,13 +88,22 @@
                             </td>
                             <td class="p-3 text-center">
                                 <span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
-                                    {{ strtoupper($order->order_status) }}
+                                    {{ $order->order_status === 'packed' ? 'SIAP DIAMBIL' : strtoupper($order->order_status) }}
                                 </span>
+                            </td>
+                            <td class="p-3 text-center">
+                                @if($order->type === 'online')
+                                    <a href="{{ route('cashier.orders.show', $order->order_number) }}" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold">
+                                        <i data-lucide="eye" class="w-3.5 h-3.5"></i> Detail
+                                    </a>
+                                @else
+                                    <span class="text-slate-400">-</span>
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="p-8 text-center text-slate-400">
+                            <td colspan="9" class="p-8 text-center text-slate-400">
                                 Belum ada pesanan online atau transaksi kasir.
                             </td>
                         </tr>

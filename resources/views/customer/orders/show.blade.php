@@ -9,10 +9,10 @@
                 <div class="flex items-center gap-2 mb-1">
                     <span class="text-xs font-bold text-neutral-400 uppercase tracking-wider font-mono">Invoice</span>
                     <span class="text-xs font-bold px-2.5 py-0.5 rounded-full {{ $order->payment_status === 'paid' ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300' : 'bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300' }}">
-                        {{ strtoupper($order->payment_status) }}
+                        Pembayaran: {{ $paymentStatusLabels[$order->payment_status] ?? strtoupper($order->payment_status) }}
                     </span>
                     <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
-                        AMBIL DI TOKO
+                        {{ $orderStatusLabels[$order->order_status] ?? strtoupper($order->order_status) }}
                     </span>
                 </div>
                 <h1 class="text-2xl font-bold font-heading text-neutral-900 dark:text-white tracking-tight font-mono">
@@ -29,8 +29,29 @@
             </div>
         </div>
 
-        <!-- Banner Lokasi Pengambilan Toko -->
-        <div class="p-4 rounded-2xl bg-neutral-50 dark:bg-slate-800/80 border border-neutral-200 dark:border-slate-700 text-xs flex items-start gap-3">
+        @if($order->address)
+            <div class="p-4 rounded-2xl bg-neutral-50 dark:bg-slate-800/80 border border-neutral-200 dark:border-slate-700 text-xs flex items-start gap-3">
+                <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center shrink-0">
+                    <i data-lucide="map-pin" class="w-4 h-4"></i>
+                </div>
+                <div class="space-y-0.5">
+                    <strong class="text-neutral-900 dark:text-white font-bold block text-xs">Alamat Penerima: {{ $order->address->recipient_name }}</strong>
+                    <p class="text-neutral-600 dark:text-slate-300 text-[11px]">{{ $order->address->full_address }}@if($order->address->city), {{ $order->address->city }}@endif @if($order->address->postal_code){{ $order->address->postal_code }}@endif</p>
+                </div>
+            </div>
+        @elseif($order->order_status === 'shipped')
+            <div class="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs flex items-start gap-3">
+                <i data-lucide="truck" class="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0"></i>
+                <div>
+                    <strong class="text-blue-950 dark:text-blue-200">Pesanan dalam pengiriman</strong>
+                    @if($order->shipping_tracking)
+                        <p class="mt-1 text-blue-800 dark:text-blue-300">Nomor pelacakan: {{ $order->shipping_tracking }}</p>
+                    @endif
+                </div>
+            </div>
+        @else
+            <!-- Banner Lokasi Pengambilan Toko -->
+            <div class="p-4 rounded-2xl bg-neutral-50 dark:bg-slate-800/80 border border-neutral-200 dark:border-slate-700 text-xs flex items-start gap-3">
             <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
                 <i data-lucide="store" class="w-4 h-4"></i>
             </div>
@@ -43,10 +64,26 @@
                     </p>
                 @endif
             </div>
-        </div>
+            </div>
+        @endif
 
         <!-- Payment Instructions Banner -->
-        @if($order->payment_method === 'cash' && $order->payment_status !== 'paid')
+        @if($order->payment_status === 'expired')
+            <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Pembayaran Kedaluwarsa</h3>
+                <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Pembayaran untuk pesanan ini telah kedaluwarsa. Periksa status pesanan atau hubungi toko untuk informasi lebih lanjut.</p>
+            </div>
+        @elseif($order->payment_status === 'refunded')
+            <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Pembayaran Dikembalikan</h3>
+                <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Status transaksi mencatat pembayaran telah dikembalikan.</p>
+            </div>
+        @elseif($order->payment_status === 'paid' && in_array($order->order_status, ['cancelled', 'void'], true))
+            <div class="p-5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/80">
+                <h3 class="text-sm font-bold text-amber-950 dark:text-amber-200">Pesanan Dibatalkan</h3>
+                <p class="mt-1 text-xs text-amber-800 dark:text-amber-300">Pembayaran tercatat berhasil, tetapi status pesanan telah dibatalkan. Silakan hubungi toko untuk tindak lanjut.</p>
+            </div>
+        @elseif($order->payment_method === 'cash' && $order->payment_status !== 'paid')
             <!-- Bayar Tunai di Kasir Toko -->
             <div class="p-5 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/80 space-y-3">
                 <div class="flex items-start gap-3">
@@ -54,7 +91,7 @@
                     <div>
                         <h3 class="text-sm font-bold text-blue-950 dark:text-blue-200">Bayar Tunai di Kasir Toko</h3>
                         <p class="text-xs text-blue-800 dark:text-blue-300 mt-0.5 leading-relaxed">
-                            Pesanan Anda sedang disiapkan. Silakan datang ke Toko Mobeli, tunjukkan nomor pesanan <strong class="font-mono text-neutral-900 dark:text-white">#{{ $order->order_number }}</strong>, dan bayar tunai sebesar <strong class="font-bold price-font text-neutral-900 dark:text-white">Rp {{ number_format($order->total, 0, ',', '.') }}</strong> langsung di kasir toko.
+                            Pesanan menunggu pembayaran. Silakan datang ke Toko Mobeli, tunjukkan nomor pesanan <strong class="font-mono text-neutral-900 dark:text-white">#{{ $order->order_number }}</strong>, dan bayar tunai sebesar <strong class="font-bold price-font text-neutral-900 dark:text-white">Rp {{ number_format($order->total, 0, ',', '.') }}</strong> langsung di kasir toko.
                         </p>
                     </div>
                 </div>
@@ -95,6 +132,47 @@
             </div>
         @endif
 
+        <section class="rounded-2xl border border-neutral-200 dark:border-slate-800 p-5 sm:p-6">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-slate-300">Perkembangan Pesanan</h2>
+            <ol class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <li class="flex items-start gap-3">
+                    <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                    </span>
+                    <div>
+                        <p class="text-sm font-semibold text-neutral-900 dark:text-white">Pesanan dibuat</p>
+                        <p class="mt-1 text-xs text-neutral-500 dark:text-slate-400">{{ $order->created_at->format('d M Y, H:i') }}</p>
+                    </div>
+                </li>
+                <li class="flex items-start gap-3">
+                    <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full {{ $order->payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' : (in_array($order->payment_status, ['expired', 'refunded'], true) ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300') }}">
+                        <i data-lucide="{{ $order->payment_status === 'paid' ? 'check' : (in_array($order->payment_status, ['expired', 'refunded'], true) ? 'circle-alert' : 'clock-3') }}" class="w-4 h-4"></i>
+                    </span>
+                    <div>
+                        <p class="text-sm font-semibold text-neutral-900 dark:text-white">
+                            {{ $order->payment_status === 'paid' ? 'Pembayaran berhasil' : 'Status pembayaran' }}
+                        </p>
+                        <p class="mt-1 text-xs text-neutral-500 dark:text-slate-400">
+                            {{ $paymentStatusLabels[$order->payment_status] ?? strtoupper($order->payment_status) }}
+                            @if($order->paid_at)
+                                · {{ $order->paid_at->format('d M Y, H:i') }}
+                            @endif
+                        </p>
+                    </div>
+                </li>
+                <li class="flex items-start gap-3">
+                    <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full {{ $order->order_status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' : (in_array($order->order_status, ['cancelled', 'void'], true) ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300') }}">
+                        <i data-lucide="{{ $order->order_status === 'completed' ? 'check' : (in_array($order->order_status, ['cancelled', 'void'], true) ? 'x' : 'package-check') }}" class="w-4 h-4"></i>
+                    </span>
+                    <div>
+                        <p class="text-sm font-semibold text-neutral-900 dark:text-white">Status pesanan saat ini</p>
+                        <p class="mt-1 text-xs text-neutral-500 dark:text-slate-400">{{ $orderStatusLabels[$order->order_status] ?? strtoupper($order->order_status) }}</p>
+                    </div>
+                </li>
+            </ol>
+            <p class="mt-4 text-[11px] text-neutral-400 dark:text-slate-500">Status dimuat dari transaksi tersimpan. Riwayat waktu untuk setiap perubahan status tidak tersedia.</p>
+        </section>
+
         <!-- Order Items Table -->
         <div>
             <h3 class="text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-slate-300 mb-3">Rincian Barang Belanjaan</h3>
@@ -111,7 +189,14 @@
                     <tbody class="divide-y divide-neutral-100 dark:divide-slate-800">
                         @foreach($order->items as $item)
                             <tr>
-                                <td class="p-3 font-bold text-neutral-900 dark:text-white">{{ $item->product_name }}</td>
+                                <td class="p-3 font-bold text-neutral-900 dark:text-white">
+                                    <div class="flex items-center gap-2.5">
+                                        @if($item->product?->image_url)
+                                            <img src="{{ $item->product->image_url }}" alt="" class="w-9 h-9 rounded-lg object-cover border border-neutral-200 dark:border-slate-700">
+                                        @endif
+                                        <span>{{ $item->product_name }}</span>
+                                    </div>
+                                </td>
                                 <td class="p-3 text-right price-font text-neutral-800 dark:text-slate-200">Rp {{ number_format($item->price, 0, ',', '.') }}</td>
                                 <td class="p-3 text-center font-bold text-neutral-800 dark:text-slate-200">{{ $item->qty }}</td>
                                 <td class="p-3 text-right font-bold price-font text-neutral-900 dark:text-white">Rp {{ number_format($item->subtotal, 0, ',', '.') }}</td>

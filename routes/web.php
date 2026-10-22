@@ -58,6 +58,9 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/profil', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profil/avatar', [ProfileController::class, 'destroyAvatar'])->name('profile.avatar.destroy');
     Route::get('/admin/profil', fn () => redirect()->route('profile.edit'))->name('admin.profile');
+    Route::get('/akun/riwayat-pesanan', [OrderController::class, 'index'])
+        ->middleware('role:customer')
+        ->name('orders.index');
 });
 
 // 4. CASHIER POS MODULE (Cashier & Owner)
@@ -66,6 +69,13 @@ Route::middleware(['auth', 'role:cashier,owner'])->prefix('kasir')->name('cashie
     Route::get('/pos', [CashierController::class, 'pos'])->name('pos');
     Route::post('/pos/transaksi', [CashierController::class, 'storeTransaction'])->name('store');
     Route::get('/transaksi', [CashierController::class, 'transactions'])->name('transactions');
+    Route::get('/pesanan/{order:order_number}', [CashierController::class, 'showOrder'])->name('orders.show');
+    Route::post('/pesanan/{order:order_number}/siap-diambil', [CashierController::class, 'markOrderReadyForPickup'])
+        ->middleware('role:cashier')
+        ->name('orders.ready');
+    Route::post('/pesanan/{order:order_number}/selesai', [CashierController::class, 'completeOnlineOrder'])
+        ->middleware('role:cashier')
+        ->name('orders.complete');
 });
 
 // 5. OWNER / ADMIN & TOPSIS ENGINE (Owner)

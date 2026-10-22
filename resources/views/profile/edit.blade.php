@@ -43,6 +43,17 @@
     @endif
 
     <div class="grid grid-cols-1 gap-8">
+        @if($user->isCustomer())
+            <nav aria-label="Navigasi profil" class="flex flex-wrap gap-2">
+                <a href="{{ route('profile.edit') }}" aria-current="page" class="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white">
+                    <i data-lucide="user-round" class="w-4 h-4"></i> Informasi Profil
+                </a>
+                <a href="{{ route('orders.index') }}" class="inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-2.5 text-sm font-semibold text-neutral-700 dark:text-slate-200 hover:border-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400 transition">
+                    <i data-lucide="receipt-text" class="w-4 h-4"></i> Riwayat Pemesanan
+                </a>
+            </nav>
+        @endif
+
         <!-- Card: Informasi Akun (Sesuai Desain Screenshot) -->
         <div class="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-10 shadow-sm border border-neutral-100 dark:border-slate-800 transition-colors">
             <h2 class="text-xl font-bold text-neutral-900 dark:text-white mb-6">Informasi Akun</h2>
