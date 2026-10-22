@@ -79,49 +79,13 @@
             font-family: 'JetBrains Mono', monospace;
             font-variant-numeric: tabular-nums;
         }
-
-        /* Global Dark Mode Overrides */
-        html.dark {
-            color-scheme: dark;
-        }
-        html.dark body {
-            background-color: #0b1120 !important;
-            color: #f1f5f9 !important;
-        }
-        html.dark .bg-white, html.dark header.bg-white\/95 {
-            background-color: #1e293b !important;
-        }
-        html.dark .bg-neutral-50, html.dark .bg-slate-50, html.dark .bg-neutral-100 {
-            background-color: #0f172a !important;
-        }
-        html.dark .border-neutral-200, html.dark .border-neutral-100 {
-            border-color: #334155 !important;
-        }
-        html.dark .text-neutral-900, html.dark .text-neutral-800 {
-            color: #f8fafc !important;
-        }
-        html.dark .text-neutral-700, html.dark .text-neutral-600 {
-            color: #cbd5e1 !important;
-        }
-        html.dark .text-neutral-500 {
-            color: #94a3b8 !important;
-        }
-        html.dark input, html.dark select, html.dark textarea {
-            background-color: #0f172a !important;
-            color: #f8fafc !important;
-            border-color: #334155 !important;
-        }
     </style>
+    @include('partials.dark-mode-styles')
 </head>
 <body class="min-h-screen flex flex-col antialiased">
-    <!-- Top Announcement Bar -->
-    <div class="bg-emerald-800 text-white text-xs py-2 px-4 text-center font-medium">
-        <span>🏪 Belanja Sembako Lengkap & Murah di Mobeli. Pesan Online, Langsung Ambil di Toko Bebas Antri!</span>
-    </div>
-
     <!-- Main Navigation Header -->
     <header class="bg-white/95 backdrop-blur-md sticky top-0 z-50 border-b border-neutral-200">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-18 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-18 flex flex-wrap md:flex-nowrap items-center justify-between gap-x-4 gap-y-2 py-2">
             <!-- Brand Logo -->
             <div class="flex items-center gap-2 sm:gap-3">
                 <button onclick="window.history.back()" class="p-2 -ml-2 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded-lg transition" title="Kembali">
@@ -146,6 +110,23 @@
 
             <!-- Nav Actions & User Info -->
             <div class="flex items-center gap-3">
+                <!-- Detail Hari, Tanggal & Jam Live Widget (Ringkas & Rapi) -->
+                <div class="hidden lg:flex items-center gap-2.5 px-3 py-1 rounded-xl bg-neutral-100/90 dark:bg-slate-800/90 border border-neutral-200/80 dark:border-slate-700/80 text-xs shadow-2xs">
+                    <div class="w-6 h-6 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary shrink-0">
+                        <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                    </div>
+                    <div class="flex flex-col text-left leading-tight">
+                        <span id="currentTimeDisplay" class="font-mono font-bold text-xs text-neutral-900 dark:text-slate-100 tracking-tight">11:35:43 WIB</span>
+                        <span id="currentDateDisplay" class="text-[10px] text-neutral-500 dark:text-slate-400 font-medium">Kamis, 22 Okt</span>
+                    </div>
+                </div>
+
+                <!-- Theme Toggle -->
+                <button type="button" onclick="toggleTheme()" title="Ganti Mode Gelap / Terang" class="p-2 rounded-lg text-neutral-600 dark:text-amber-400 hover:bg-neutral-100 dark:hover:bg-slate-800 transition">
+                    <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+                </button>
+
                 @auth
                     @if(auth()->user()->isOwner())
                         <a href="{{ url('/admin') }}" class="px-3 py-1.5 rounded-lg bg-neutral-900 text-white text-xs font-semibold hover:bg-neutral-800 transition flex items-center gap-1.5">
@@ -166,12 +147,6 @@
                         </a>
                     @endif
 
-                    <!-- Theme Toggle -->
-                    <button type="button" onclick="toggleTheme()" title="Ganti Mode Gelap / Terang" class="p-2 rounded-lg text-neutral-600 dark:text-amber-400 hover:bg-neutral-100 dark:hover:bg-slate-800 transition">
-                        <i data-lucide="moon" class="w-5 h-5 dark:hidden"></i>
-                        <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
-                    </button>
-
                     <!-- User Menu -->
                     <div class="flex items-center gap-2 pl-2 border-l border-neutral-200">
                         <a href="{{ route('profile.edit') }}" title="Buka Profil Saya" class="flex items-center gap-2 text-right group hover:opacity-85 transition">
@@ -189,12 +164,9 @@
                                 </span>
                             </div>
                         </a>
-                        <form action="{{ route('logout') }}" method="POST" class="inline">
-                            @csrf
-                            <button type="submit" title="Keluar Akun" class="p-2 text-neutral-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition">
-                                <i data-lucide="log-out" class="w-4 h-4"></i>
-                            </button>
-                        </form>
+                        <button type="button" onclick="openLogoutModal(event)" title="Keluar Akun" class="p-2 text-neutral-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 dark:hover:text-red-400 transition">
+                            <i data-lucide="log-out" class="w-4 h-4"></i>
+                        </button>
                     </div>
                 @else
                     <a href="{{ route('login') }}" class="px-3.5 py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition">
@@ -209,6 +181,7 @@
     </header>
 
     @include('partials.flash-toast')
+    @include('partials.logout-modal')
 
     <!-- Main Content Slot -->
     <main class="flex-1">
@@ -235,25 +208,46 @@
                     </div>
                 </div>
 
-                @if(!request()->is('login', 'daftar', 'masuk'))
                 <div>
-                    <h4 class="font-heading font-semibold text-white text-xs uppercase tracking-wider mb-3">Metode Pembayaran</h4>
-                    <p class="text-xs text-neutral-400 mb-3">Mendukung QRIS, GoPay, Transfer Bank BRI, dan Tunai di Kasir.</p>
-                    <div class="flex items-center gap-2">
-                        <span class="px-2 py-1 rounded bg-neutral-800 text-[11px] font-mono text-neutral-300">QRIS</span>
-                        <span class="px-2 py-1 rounded bg-neutral-800 text-[11px] font-mono text-neutral-300">BANK BRI</span>
-                        <span class="px-2 py-1 rounded bg-neutral-800 text-[11px] font-mono text-neutral-300">CASH</span>
+                    <div class="flex items-center justify-between mb-2.5">
+                        <h4 class="font-heading font-semibold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-primary"></i> Lokasi Toko Fisik
+                        </h4>
+                        <a href="https://maps.google.com/?q=Sukajadi+Bandung" target="_blank" class="text-[11px] text-primary hover:text-blue-400 flex items-center gap-1 font-medium transition">
+                            Buka Peta <i data-lucide="external-link" class="w-3 h-3"></i>
+                        </a>
+                    </div>
+                    
+                    <div class="relative w-full h-32 rounded-2xl overflow-hidden border border-neutral-700/60 bg-neutral-800/80 group flex flex-col justify-between p-3.5 shadow-sm">
+                        <!-- Stylized Map Pattern Background -->
+                        <div class="absolute inset-0 opacity-20 pointer-events-none" style="background-image: radial-gradient(#64748b 1px, transparent 1px); background-size: 14px 14px;"></div>
+                        
+                        <!-- Map Grid Lines Simulation -->
+                        <div class="absolute inset-0 opacity-15 pointer-events-none">
+                            <div class="absolute top-1/2 left-0 right-0 h-1 bg-neutral-400 -rotate-3"></div>
+                            <div class="absolute top-0 bottom-0 left-1/3 w-1 bg-neutral-400 rotate-6"></div>
+                            <div class="absolute top-0 bottom-0 right-1/4 w-1 bg-neutral-500 -rotate-12"></div>
+                        </div>
+
+                        <!-- Card Content -->
+                        <div class="relative z-10 flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shrink-0 shadow-sm">
+                                <i data-lucide="store" class="w-4 h-4 text-primary"></i>
+                            </div>
+                            <div>
+                                <h5 class="text-xs font-bold text-white tracking-tight">Toko Kelontong Mobeli</h5>
+                                <p class="text-[11px] text-neutral-400 mt-0.5">Jl. Merdeka No. 45, Sukajadi, Kota Bandung</p>
+                            </div>
+                        </div>
+
+                        <div class="relative z-10 flex items-center justify-between text-[10px] text-neutral-400 border-t border-neutral-700/50 pt-2 mt-auto">
+                            <span>🕒 Buka: 07:00 - 21:30 WIB</span>
+                            <span class="text-emerald-400 font-semibold flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Buka Hari Ini
+                            </span>
+                        </div>
                     </div>
                 </div>
-                @else
-                <div class="md:col-span-3 flex flex-col justify-center">
-                    <h4 class="font-heading font-semibold text-white text-xs uppercase tracking-wider mb-3">Lokasi Kami</h4>
-                    <div class="w-full h-32 bg-neutral-800 rounded-xl flex flex-col items-center justify-center border border-neutral-700/50">
-                        <i data-lucide="map-pin" class="w-6 h-6 text-neutral-500 mb-2"></i>
-                        <span class="text-xs text-neutral-500 font-medium">Dummy Map Placeholder</span>
-                    </div>
-                </div>
-                @endif
             </div>
 
             <div class="pt-6 border-t border-neutral-800 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 gap-2">
@@ -282,6 +276,32 @@
                 lucide.createIcons();
             }
         }
+
+        // Live Clock & Date Widget (Format Hari, Tanggal, Jam WIB)
+        function updateDateTime() {
+            const now = new Date();
+            const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+            
+            const dayName = days[now.getDay()];
+            const date = String(now.getDate()).padStart(2, '0');
+            const month = months[now.getMonth()];
+            const year = now.getFullYear();
+
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+
+            const dateStr = `${dayName}, ${date} ${month}`;
+            const timeStr = `${hours}:${minutes}:${seconds} WIB`;
+
+            const dateElem = document.getElementById('currentDateDisplay');
+            const timeElem = document.getElementById('currentTimeDisplay');
+            if (dateElem) dateElem.textContent = dateStr;
+            if (timeElem) timeElem.textContent = timeStr;
+        }
+        setInterval(updateDateTime, 1000);
+        updateDateTime();
     </script>
     @stack('scripts')
 </body>

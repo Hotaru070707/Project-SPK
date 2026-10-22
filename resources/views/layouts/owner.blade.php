@@ -52,50 +52,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .price-font { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
-
-        /* Global Dark Mode Overrides */
-        html.dark {
-            color-scheme: dark;
-        }
-        html.dark body {
-            background-color: #0b1120 !important;
-            color: #f1f5f9 !important;
-        }
-        html.dark .bg-white {
-            background-color: #1e293b !important;
-        }
-        html.dark .bg-neutral-50, html.dark .bg-slate-50 {
-            background-color: #0b1120 !important;
-        }
-        html.dark .border-neutral-100, html.dark .border-neutral-200 {
-            border-color: #334155 !important;
-        }
-        html.dark .text-neutral-900, html.dark .text-neutral-800 {
-            color: #f8fafc !important;
-        }
-        html.dark .text-neutral-700, html.dark .text-neutral-600 {
-            color: #cbd5e1 !important;
-        }
-        html.dark .text-neutral-500, html.dark .text-neutral-400 {
-            color: #94a3b8 !important;
-        }
-        html.dark header.bg-white {
-            background-color: #0f172a !important;
-            border-color: #1e293b !important;
-        }
-        html.dark input, html.dark select, html.dark textarea {
-            background-color: #0f172a !important;
-            color: #f8fafc !important;
-            border-color: #334155 !important;
-        }
-        html.dark table thead th {
-            background-color: #0f172a !important;
-            color: #94a3b8 !important;
-        }
-        html.dark tr.border-b, html.dark td {
-            border-color: #334155 !important;
-        }
     </style>
+    @include('partials.dark-mode-styles')
 </head>
 <body class="bg-neutral-50 text-neutral-800 font-sans antialiased min-h-screen flex">
     <!-- Sidebar -->
@@ -188,12 +146,9 @@
                     <span class="text-[10px] text-emerald-400 font-mono block">Owner/Admin</span>
                 </div>
             </a>
-            <form action="{{ route('logout') }}" method="POST" class="shrink-0">
-                @csrf
-                <button type="submit" title="Logout" class="p-1.5 text-slate-400 hover:text-red-400 rounded transition">
-                    <i data-lucide="log-out" class="w-4 h-4"></i>
-                </button>
-            </form>
+            <button type="button" onclick="openLogoutModal(event)" title="Keluar Akun" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition shrink-0">
+                <i data-lucide="log-out" class="w-4 h-4"></i>
+            </button>
         </div>
     </aside>
 
@@ -211,16 +166,14 @@
             </div>
 
             <div class="flex items-center gap-3">
-                <!-- Detail Hari, Tanggal, Jam WIB -->
-                <div class="hidden md:flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-neutral-100 dark:bg-slate-800 border border-neutral-200 dark:border-slate-700 text-neutral-700 dark:text-slate-300 text-xs shadow-sm">
-                    <div class="flex items-center gap-1.5 font-medium">
-                        <i data-lucide="calendar" class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400"></i>
-                        <span id="currentDateDisplay">Senin, 05 Okt 2026</span>
-                    </div>
-                    <span class="text-neutral-300 dark:text-slate-600 font-light">|</span>
-                    <div class="flex items-center gap-1.5 font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                <!-- Detail Hari, Tanggal, Jam WIB (Ringkas & Rapi) -->
+                <div class="hidden lg:flex items-center gap-2.5 px-3 py-1 rounded-xl bg-neutral-100/90 dark:bg-slate-800/90 border border-neutral-200/80 dark:border-slate-700/80 text-xs shadow-2xs">
+                    <div class="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
                         <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-                        <span id="currentTimeDisplay">10:48:00 WIB</span>
+                    </div>
+                    <div class="flex flex-col text-left leading-tight">
+                        <span id="currentTimeDisplay" class="font-mono font-bold text-xs text-neutral-900 dark:text-slate-100 tracking-tight">10:48:00 WIB</span>
+                        <span id="currentDateDisplay" class="text-[10px] text-neutral-500 dark:text-slate-400 font-medium">Senin, 05 Okt</span>
                     </div>
                 </div>
 
@@ -245,6 +198,7 @@
         </header>
 
         @include('partials.flash-toast')
+        @include('partials.logout-modal')
 
         <main class="p-6">
             @yield('content')
@@ -283,7 +237,7 @@
             const minutes = String(now.getMinutes()).padStart(2, '0');
             const seconds = String(now.getSeconds()).padStart(2, '0');
 
-            const dateStr = `${dayName}, ${date} ${month} ${year}`;
+            const dateStr = `${dayName}, ${date} ${month}`;
             const timeStr = `${hours}:${minutes}:${seconds} WIB`;
 
             const dateEl = document.getElementById('currentDateDisplay');

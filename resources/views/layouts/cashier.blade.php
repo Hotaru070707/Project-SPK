@@ -52,36 +52,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .price-font { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
-
-        /* Global Dark Mode Overrides */
-        html.dark {
-            color-scheme: dark;
-        }
-        html.dark body {
-            background-color: #0b1120 !important;
-            color: #f1f5f9 !important;
-        }
-        html.dark .bg-white {
-            background-color: #1e293b !important;
-        }
-        html.dark .bg-slate-100 {
-            background-color: #0b1120 !important;
-        }
-        html.dark .border-slate-200, html.dark .border-neutral-200 {
-            border-color: #334155 !important;
-        }
-        html.dark .text-slate-800, html.dark .text-neutral-800 {
-            color: #f8fafc !important;
-        }
-        html.dark .text-slate-600, html.dark .text-neutral-600 {
-            color: #cbd5e1 !important;
-        }
-        html.dark input, html.dark select, html.dark textarea {
-            background-color: #0f172a !important;
-            color: #f8fafc !important;
-            border-color: #334155 !important;
-        }
     </style>
+    @include('partials.dark-mode-styles')
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
     <!-- Top Cashier Nav -->
@@ -105,6 +77,17 @@
         </div>
 
         <div class="flex items-center gap-4 text-xs">
+            <!-- Detail Hari, Tanggal, Jam WIB (Ringkas & Rapi) -->
+            <div class="hidden lg:flex items-center gap-2.5 px-3 py-1 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs shadow-2xs">
+                <div class="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                    <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                </div>
+                <div class="flex flex-col text-left leading-tight">
+                    <span id="cashierTimeDisplay" class="font-mono font-bold text-xs text-white tracking-tight">10:48:00 WIB</span>
+                    <span id="cashierDateDisplay" class="text-[10px] text-slate-400 font-medium">Senin, 05 Okt</span>
+                </div>
+            </div>
+
             <!-- Tombol Kembali -->
             <button onclick="window.history.back()" class="text-xs flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition" title="Kembali">
                 <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
@@ -133,16 +116,14 @@
             <a href="{{ url('/') }}" class="text-xs text-slate-300 hover:text-white px-2 py-1 rounded bg-slate-800">
                 Toko Online
             </a>
-            <form action="{{ route('logout') }}" method="POST" class="inline">
-                @csrf
-                <button type="submit" class="px-2.5 py-1 bg-red-600/80 hover:bg-red-600 text-white font-bold rounded">
-                    Keluar
-                </button>
-            </form>
+            <button type="button" onclick="openLogoutModal(event)" class="px-2.5 py-1 bg-red-600/80 hover:bg-red-600 text-white font-bold rounded transition">
+                Keluar
+            </button>
         </div>
     </header>
 
     @include('partials.flash-toast')
+    @include('partials.logout-modal')
 
     <main class="flex-1 flex flex-col">
         @yield('content')
@@ -163,6 +144,32 @@
                 lucide.createIcons();
             }
         }
+
+        // Live Clock & Date Widget (Format Hari, Tanggal, Jam WIB)
+        function updateCashierDateTime() {
+            const now = new Date();
+            const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+            const dayName = days[now.getDay()];
+            const date = String(now.getDate()).padStart(2, '0');
+            const month = months[now.getMonth()];
+            const year = now.getFullYear();
+
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+
+            const dateStr = `${dayName}, ${date} ${month}`;
+            const timeStr = `${hours}:${minutes}:${seconds} WIB`;
+
+            const dateElem = document.getElementById('cashierDateDisplay');
+            const timeElem = document.getElementById('cashierTimeDisplay');
+            if (dateElem) dateElem.textContent = dateStr;
+            if (timeElem) timeElem.textContent = timeStr;
+        }
+        setInterval(updateCashierDateTime, 1000);
+        updateCashierDateTime();
     </script>
     @stack('scripts')
 </body>

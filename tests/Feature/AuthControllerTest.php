@@ -83,4 +83,24 @@ class AuthControllerTest extends TestCase
 
         $response->assertRedirect(route('home'));
     }
+
+    public function test_authenticated_user_can_logout_and_receives_success_toast(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'customer',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('logout'));
+
+        $response->assertRedirect(route('login'))
+            ->assertSessionHas('success', 'Anda berhasil keluar dari akun.')
+            ->assertSessionHas('status', 'Anda berhasil keluar dari akun.');
+
+        $this->assertGuest();
+
+        $this->get(route('login'))
+            ->assertOk()
+            ->assertSee('Anda berhasil keluar dari akun.');
+    }
 }

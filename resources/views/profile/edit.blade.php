@@ -334,18 +334,7 @@
     }
 
     function promptLogout() {
-        openConfirmModal({
-            title: 'Keluar dari Akun?',
-            message: 'Apakah Anda yakin ingin keluar dari akun ini sekarang?',
-            iconName: 'log-out',
-            iconBg: 'bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400',
-            iconColor: 'text-red-600 dark:text-red-400',
-            confirmBtnText: 'Ya, Keluar',
-            confirmBtnClass: 'bg-red-600 hover:bg-red-700 text-white',
-            onConfirm: function() {
-                document.getElementById('logoutForm').submit();
-            }
-        });
+        openLogoutModal();
     }
 
     function promptDeleteAvatar() {
