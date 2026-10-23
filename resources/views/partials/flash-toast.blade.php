@@ -37,7 +37,10 @@
                     window.setTimeout(() => toast.remove(), 300);
                 };
                 const dismissButton = toast.querySelector('[data-dismiss-toast]');
-                const timeout = window.setTimeout(dismissToast, 5000);
+                const messageText = (toast.textContent || '').toLowerCase();
+                const isCartToast = messageText.includes('keranjang');
+                const duration = isCartToast ? 1000 : 5000;
+                const timeout = window.setTimeout(dismissToast, duration);
 
                 dismissButton.addEventListener('click', () => {
                     window.clearTimeout(timeout);

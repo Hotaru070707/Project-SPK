@@ -60,7 +60,7 @@
     <header class="bg-slate-900 text-white px-4 sm:px-6 py-2.5 flex items-center justify-between border-b border-slate-800 shadow-md">
         <div class="flex items-center gap-4">
             <a href="{{ url('/kasir') }}" class="flex items-center gap-2.5 group">
-                <img src="{{ asset('images/logo.png') }}" alt="Mobeli Logo" class="w-8 h-8 rounded-lg object-cover shadow-sm group-hover:scale-105 transition">
+                <img src="{{ asset('images/logo.png') }}" alt="Mobeli Logo" class="w-10 h-10 rounded-xl object-contain shadow-sm group-hover:scale-105 transition">
                 <span class="font-heading font-extrabold text-base tracking-tight text-white">
                     Mobeli <span class="text-xs font-normal text-slate-400">Kasir</span>
                 </span>

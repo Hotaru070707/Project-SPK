@@ -258,8 +258,23 @@
         border-color: #3b82f6 !important;
     }
 
+    html.dark input[type="date"] {
+        color-scheme: dark;
+    }
+
     html.dark input[type="date"]::-webkit-calendar-picker-indicator {
-        filter: invert(0.85);
+        filter: brightness(0) invert(1) !important;
+        opacity: 0.95 !important;
+        cursor: pointer;
+        padding: 2px;
+        border-radius: 4px;
+        transition: all 0.2s ease-in-out;
+    }
+
+    html.dark input[type="date"]::-webkit-calendar-picker-indicator:hover {
+        opacity: 1 !important;
+        transform: scale(1.15);
+        filter: brightness(0) saturate(100%) invert(60%) sepia(85%) saturate(1800%) hue-rotate(185deg) brightness(105%) contrast(105%) !important;
     }
 
     /* 7. Tables */

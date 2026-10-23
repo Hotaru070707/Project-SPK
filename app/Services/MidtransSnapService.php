@@ -25,32 +25,37 @@ class MidtransSnapService
             );
         }
 
-        $response = Http::baseUrl($snapUrl)
+        $httpClient = Http::baseUrl($snapUrl)
             ->acceptJson()
             ->asJson()
             ->withBasicAuth($serverKey, '')
             ->connectTimeout(5)
-            ->timeout(30)
-            ->post('/snap/v1/transactions', [
-                'transaction_details' => [
-                    'order_id' => $order->midtrans_order_id,
-                    'gross_amount' => (int) $order->total,
-                ],
-                'customer_details' => [
-                    'first_name' => $recipientName,
-                    'phone' => $phone,
-                ],
-                'enabled_payments' => ['other_qris'],
-                'callbacks' => [
-                    'finish' => route(
-                        'orders.show',
-                        [
-                            'orderNumber' => $order->order_number,
-                            'midtrans_return' => 1,
-                        ]
-                    ),
-                ],
-            ]);
+            ->timeout(30);
+
+        if (! config('services.midtrans.curl_verify', true)) {
+            $httpClient = $httpClient->withoutVerifying();
+        }
+
+        $response = $httpClient->post('/snap/v1/transactions', [
+            'transaction_details' => [
+                'order_id' => $order->midtrans_order_id,
+                'gross_amount' => (int) $order->total,
+            ],
+            'customer_details' => [
+                'first_name' => $recipientName,
+                'phone' => $phone,
+            ],
+            'enabled_payments' => ['other_qris'],
+            'callbacks' => [
+                'finish' => route(
+                    'orders.show',
+                    [
+                        'orderNumber' => $order->order_number,
+                        'midtrans_return' => 1,
+                    ]
+                ),
+            ],
+        ]);
 
         // Catat respons error untuk mempermudah pemeriksaan.
         if (! $response->successful()) {
@@ -110,16 +115,21 @@ class MidtransSnapService
         }
 
         try {
-            $response = Http::baseUrl($apiUrl)
+            $httpClient = Http::baseUrl($apiUrl)
                 ->acceptJson()
                 ->withBasicAuth($serverKey, '')
                 ->connectTimeout(5)
-                ->timeout(10)
-                ->get(
-                    '/v2/'
-                    .rawurlencode($order->midtrans_order_id)
-                    .'/status'
-                );
+                ->timeout(10);
+
+            if (! config('services.midtrans.curl_verify', true)) {
+                $httpClient = $httpClient->withoutVerifying();
+            }
+
+            $response = $httpClient->get(
+                '/v2/'
+                .rawurlencode($order->midtrans_order_id)
+                .'/status'
+            );
         } catch (ConnectionException $exception) {
             logger()->warning(
                 'Gagal memeriksa status pembayaran Midtrans',

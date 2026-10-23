@@ -177,7 +177,7 @@
                                     {{ $item['product']['stock'] <= $item['product']['min_stock'] ? 'Restock Segera' : ($no <= 3 ? 'Produk Unggulan' : 'Normal') }}
                                 </span>
                             </td>
-                            <td class="p-3 text-neutral-600">{{ $item['reason'] }}</td>
+                            <td class="p-3 text-neutral-600">{{ $item['reason'] ?? ($item['recommendation'] ?? 'Evaluasi berbasis skor preferensi TOPSIS.') }}</td>
                         </tr>
                         @php $no++; @endphp
                     @endforeach

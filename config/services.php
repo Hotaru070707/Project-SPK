@@ -45,6 +45,7 @@ return [
         'api_url' => env('MIDTRANS_IS_PRODUCTION', false)
             ? 'https://api.midtrans.com'
             : 'https://api.sandbox.midtrans.com',
+        'curl_verify' => env('MIDTRANS_CURL_VERIFY', true),
     ],
 
 ];

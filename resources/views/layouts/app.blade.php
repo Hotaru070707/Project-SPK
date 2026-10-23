@@ -92,7 +92,7 @@
                     <i data-lucide="arrow-left" class="w-5 h-5"></i>
                 </button>
                 <a href="{{ url('/') }}" class="flex items-center gap-2.5 group">
-                    <img src="{{ asset('images/logo.png') }}" alt="Mobeli Logo" class="w-10 h-10 rounded-xl object-cover shadow-sm group-hover:scale-105 transition">
+                    <img src="{{ asset('images/logo.png') }}" alt="Mobeli Logo" class="w-11 h-11 rounded-xl object-contain shadow-sm group-hover:scale-105 transition">
                 <div>
                     <span class="font-heading font-extrabold text-xl text-neutral-900 tracking-tight flex items-center gap-1.5">
                         Mobeli
@@ -139,7 +139,7 @@
                     @endif
 
                     @if(!auth()->user()->isOwner())
-                        <a href="{{ url('/akun/keranjang') }}" class="relative p-2 rounded-lg text-neutral-700 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-slate-800 transition">
+                        <a href="{{ url('/akun/keranjang') }}" id="nav-cart-btn" class="relative p-2 rounded-lg text-neutral-700 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-slate-800 transition">
                             <i data-lucide="shopping-cart" class="w-5 h-5"></i>
                             <span id="cart-counter" class="absolute -top-1 -right-1 bg-secondary text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
                                 {{ session('cart_count', 0) }}
@@ -181,6 +181,7 @@
     </header>
 
     @include('partials.flash-toast')
+    @include('partials.cart-animation')
     @include('partials.logout-modal')
 
     <!-- Main Content Slot -->

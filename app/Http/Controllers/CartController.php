@@ -29,6 +29,14 @@ class CartController extends Controller
         $user = $request->user();
 
         if (! $user) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'redirect' => route('login'),
+                    'message' => 'Silakan masuk sebagai pelanggan terlebih dahulu untuk menambahkan produk ke keranjang.',
+                ], 401);
+            }
+
             return redirect()->route('login')
                 ->with('error', 'Silakan masuk sebagai pelanggan terlebih dahulu untuk menambahkan produk ke keranjang.');
         }
@@ -60,9 +68,24 @@ class CartController extends Controller
         }
 
         session()->put('cart', $cart);
-        session()->put('cart_count', array_sum(array_column($cart, 'qty')));
+        $cartCount = array_sum(array_column($cart, 'qty'));
+        session()->put('cart_count', $cartCount);
 
-        return redirect()->back()->with('success', "{$product->name} berhasil ditambahkan ke keranjang!");
+        $message = "{$product->name} berhasil ditambahkan ke keranjang!";
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'cart_count' => $cartCount,
+                'product' => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                ],
+            ]);
+        }
+
+        return redirect()->back()->with('success', $message);
     }
 
     public function update(Request $request)

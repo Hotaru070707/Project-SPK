@@ -257,7 +257,18 @@ class TopsisController extends Controller
             return redirect()->route('admin.topsis.calculate');
         }
 
-        $preferences = $latestResult->preferences;
+        $preferences = collect($latestResult->preferences)->map(function ($item) {
+            if (! isset($item['reason'])) {
+                $stock = $item['product']['stock'] ?? 0;
+                $minStock = $item['product']['min_stock'] ?? 0;
+                $isUrgent = $stock <= $minStock;
+                $item['reason'] = $isUrgent
+                    ? 'Stok berada pada atau di bawah batas minimum.'
+                    : 'Evaluasi berdasarkan skor preferensi TOPSIS ('.number_format($item['ci'] ?? 0, 4).').';
+            }
+
+            return $item;
+        })->all();
         $criteria = $latestResult->criteria_snapshot;
 
         return view('owner.topsis.recommendations', compact('preferences', 'criteria', 'latestResult'));
