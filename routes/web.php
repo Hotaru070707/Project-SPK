@@ -44,6 +44,10 @@ Route::get('/daftar', [AuthController::class, 'showRegister'])->name('register')
 Route::post('/daftar', [AuthController::class, 'register']);
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+// Google OAuth
+Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('auth.google');
+Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
+
 Route::get('/lupa-password', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
 Route::post('/lupa-password', [PasswordResetController::class, 'sendOtp'])->name('password.email');
 Route::get('/verifikasi-otp', [PasswordResetController::class, 'showOtpForm'])->name('password.otp.form');

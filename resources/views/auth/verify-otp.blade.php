@@ -27,26 +27,6 @@
                 </div>
             @endif
 
-            @if (session('demo_otp'))
-                <div class="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
-                    <div class="flex items-center gap-2 font-bold mb-1 text-amber-800">
-                        <i data-lucide="info" class="w-4 h-4 text-amber-600"></i>
-                        <span>Mode Pengujian / Demo:</span>
-                    </div>
-                    <p class="text-xs text-amber-700 mb-2 leading-relaxed">
-                        {{ session('smtp_warning') ?? 'Kode OTP Anda:' }}
-                    </p>
-                    <div class="flex items-center justify-between bg-white/80 p-2.5 rounded-lg border border-amber-200">
-                        <span class="font-mono text-xl font-extrabold tracking-widest text-neutral-900">{{ session('demo_otp') }}</span>
-                        <button type="button" 
-                                onclick="document.getElementById('otp').value='{{ session('demo_otp') }}'"
-                                class="text-xs font-semibold px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-md transition">
-                            Isi Otomatis
-                        </button>
-                    </div>
-                </div>
-            @endif
-
             <form action="{{ route('password.otp.verify') }}" method="POST" class="space-y-5">
                 @csrf
 

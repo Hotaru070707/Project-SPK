@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\SendOtpMail;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
-use App\Models\User;
-use App\Mail\SendOtpMail;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Mail;
 
 class PasswordResetController extends Controller
 {
@@ -36,7 +36,7 @@ class PasswordResetController extends Controller
         $email = strtolower(trim($request->email));
         $user = User::where('email', $email)->first();
 
-        if (!$user) {
+        if (! $user) {
             return back()->withErrors([
                 'email' => 'Alamat email ini tidak terdaftar dalam sistem toko kami.',
             ])->withInput();
@@ -57,26 +57,20 @@ class PasswordResetController extends Controller
         // Simpan email ke session untuk tahap verifikasi
         session(['reset_email' => $email]);
 
-        // Coba kirim email via SMTP
-        $mailSuccess = false;
+        // Kirim email via SMTP
         try {
             Mail::to($user->email)->send(new SendOtpMail($otp, $user->name));
-            $mailSuccess = true;
         } catch (\Throwable $e) {
-            Log::error('SMTP OTP Error: ' . $e->getMessage());
+            Log::error('SMTP OTP Error: '.$e->getMessage(), ['exception' => $e]);
+
+            return back()->withErrors([
+                'email' => 'Gagal mengirim email OTP: '.$e->getMessage().'. Pastikan jaringan mengizinkan koneksi email.',
+            ])->withInput();
         }
 
-        $redirectData = [
-            'status' => 'Kode verifikasi OTP 6-digit telah dikirimkan ke email ' . $email . '. Silakan periksa kotak masuk atau folder spam Anda.',
-            'mail_success' => $mailSuccess,
-        ];
-
-        if (!$mailSuccess) {
-            $redirectData['demo_otp'] = $otp;
-            $redirectData['smtp_warning'] = 'Catatan: Akun SMTP Google pengirim belum terhubung sandi barunya. Untuk pengujian/demo langsung, gunakan kode OTP berikut:';
-        }
-
-        return redirect()->route('password.otp.form')->with($redirectData);
+        return redirect()->route('password.otp.form')->with([
+            'status' => 'Kode verifikasi OTP 6-digit telah dikirimkan ke email '.$email.'. Silakan periksa kotak masuk atau folder spam Anda.',
+        ]);
     }
 
     /**
@@ -85,9 +79,9 @@ class PasswordResetController extends Controller
     public function showOtpForm()
     {
         $email = session('reset_email');
-        if (!$email) {
+        if (! $email) {
             return redirect()->route('password.request')->withErrors([
-                'email' => 'Silakan masukkan email Anda terlebih dahulu.'
+                'email' => 'Silakan masukkan email Anda terlebih dahulu.',
             ]);
         }
 
@@ -108,31 +102,31 @@ class PasswordResetController extends Controller
         ]);
 
         $email = session('reset_email');
-        if (!$email) {
+        if (! $email) {
             return redirect()->route('password.request')->withErrors([
-                'email' => 'Sesi reset password telah berakhir. Silakan ulangi.'
+                'email' => 'Sesi reset password telah berakhir. Silakan ulangi.',
             ]);
         }
 
         $record = DB::table('password_reset_tokens')->where('email', $email)->first();
 
-        if (!$record) {
+        if (! $record) {
             return back()->withErrors([
-                'otp' => 'Permintaan OTP tidak ditemukan. Silakan kirim ulang kode baru.'
+                'otp' => 'Permintaan OTP tidak ditemukan. Silakan kirim ulang kode baru.',
             ]);
         }
 
         // Cek kedaluwarsa (15 menit)
         if (Carbon::parse($record->created_at)->addMinutes(15)->isPast()) {
             return back()->withErrors([
-                'otp' => 'Kode OTP telah kadaluarsa (melebihi 15 menit). Silakan klik kirim ulang kode.'
+                'otp' => 'Kode OTP telah kadaluarsa (melebihi 15 menit). Silakan klik kirim ulang kode.',
             ]);
         }
 
         // Cek kecocokan OTP
         if ($record->token !== trim($request->otp)) {
             return back()->withErrors([
-                'otp' => 'Kode OTP yang Anda masukkan salah. Periksa kembali email Anda.'
+                'otp' => 'Kode OTP yang Anda masukkan salah. Periksa kembali email Anda.',
             ])->withInput();
         }
 
@@ -150,12 +144,12 @@ class PasswordResetController extends Controller
     public function resendOtp()
     {
         $email = session('reset_email');
-        if (!$email) {
+        if (! $email) {
             return redirect()->route('password.request');
         }
 
         $user = User::where('email', $email)->first();
-        if (!$user) {
+        if (! $user) {
             return redirect()->route('password.request');
         }
 
@@ -169,25 +163,20 @@ class PasswordResetController extends Controller
             ]
         );
 
-        $mailSuccess = false;
+        // Kirim ulang email via SMTP
         try {
             Mail::to($user->email)->send(new SendOtpMail($otp, $user->name));
-            $mailSuccess = true;
         } catch (\Throwable $e) {
-            Log::error('SMTP Resend Error: ' . $e->getMessage());
+            Log::error('SMTP Resend Error: '.$e->getMessage(), ['exception' => $e]);
+
+            return back()->withErrors([
+                'otp' => 'Gagal mengirim ulang kode OTP ke email: '.$e->getMessage(),
+            ]);
         }
 
-        $redirectData = [
-            'status' => 'Kode OTP baru telah berhasil dibuat untuk ' . $email,
-            'mail_success' => $mailSuccess,
-        ];
-
-        if (!$mailSuccess) {
-            $redirectData['demo_otp'] = $otp;
-            $redirectData['smtp_warning'] = 'Catatan: Akun SMTP Google pengirim belum terhubung sandi barunya. Untuk pengujian/demo langsung, gunakan kode OTP berikut:';
-        }
-
-        return redirect()->route('password.otp.form')->with($redirectData);
+        return redirect()->route('password.otp.form')->with([
+            'status' => 'Kode OTP baru telah berhasil dikirimkan ke email '.$email.'. Silakan periksa kotak masuk Anda.',
+        ]);
     }
 
     /**
@@ -198,9 +187,9 @@ class PasswordResetController extends Controller
         $email = session('reset_email');
         $verified = session('otp_verified');
 
-        if (!$email || !$verified) {
+        if (! $email || ! $verified) {
             return redirect()->route('password.request')->withErrors([
-                'email' => 'Harap verifikasi kode OTP terlebih dahulu.'
+                'email' => 'Harap verifikasi kode OTP terlebih dahulu.',
             ]);
         }
 
@@ -215,7 +204,7 @@ class PasswordResetController extends Controller
         $email = session('reset_email');
         $verified = session('otp_verified');
 
-        if (!$email || !$verified) {
+        if (! $email || ! $verified) {
             return redirect()->route('password.request');
         }
 
@@ -228,9 +217,9 @@ class PasswordResetController extends Controller
         ]);
 
         $user = User::where('email', $email)->first();
-        if (!$user) {
+        if (! $user) {
             return redirect()->route('password.request')->withErrors([
-                'email' => 'Pengguna tidak ditemukan.'
+                'email' => 'Pengguna tidak ditemukan.',
             ]);
         }
 

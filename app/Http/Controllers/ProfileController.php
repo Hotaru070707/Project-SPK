@@ -19,14 +19,12 @@ class ProfileController extends Controller
             default => 'layouts.app',
         };
 
-        // Format phone without prefix +62/62/0 for clean input display
+        // Format phone with standard Indonesian prefix 08... for natural input display
         $phone = $user->phone ?? '';
         if (str_starts_with($phone, '+62')) {
-            $phone = substr($phone, 3);
+            $phone = '0'.substr($phone, 3);
         } elseif (str_starts_with($phone, '62')) {
-            $phone = substr($phone, 2);
-        } elseif (str_starts_with($phone, '0')) {
-            $phone = substr($phone, 1);
+            $phone = '0'.substr($phone, 2);
         }
 
         return view('profile.edit', compact('user', 'layout', 'phone'));

@@ -48,4 +48,18 @@ return [
         'curl_verify' => env('MIDTRANS_CURL_VERIFY', true),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', 'http://localhost:8000/auth/google/callback'),
+        'guzzle' => [
+            'verify' => match (env('GOOGLE_CURL_VERIFY')) {
+                null, '' => file_exists(base_path('resources/certs/cacert.pem'))
+                    ? base_path('resources/certs/cacert.pem')
+                    : (file_exists('C:/xampp/apache/bin/curl-ca-bundle.crt') ? 'C:/xampp/apache/bin/curl-ca-bundle.crt' : true),
+                default => env('GOOGLE_CURL_VERIFY'),
+            },
+        ],
+    ],
+
 ];

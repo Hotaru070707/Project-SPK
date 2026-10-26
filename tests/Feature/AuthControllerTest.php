@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\GoogleProvider;
+use Laravel\Socialite\Two\InvalidStateException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -102,5 +105,85 @@ class AuthControllerTest extends TestCase
         $this->get(route('login'))
             ->assertOk()
             ->assertSee('Anda berhasil keluar dari akun.');
+    }
+
+    public function test_user_can_redirect_to_google_oauth(): void
+    {
+        $response = $this->get(route('auth.google'));
+
+        $response->assertRedirect();
+        $this->assertStringContainsString('accounts.google.com', (string) $response->headers->get('Location'));
+    }
+
+    public function test_new_user_can_authenticate_via_google_oauth(): void
+    {
+        $abstractUser = \Mockery::mock(\Laravel\Socialite\Two\User::class);
+        $abstractUser->shouldReceive('getId')->andReturn('google-unique-id-12345');
+        $abstractUser->shouldReceive('getName')->andReturn('Google User');
+        $abstractUser->shouldReceive('getEmail')->andReturn('googleuser@example.com');
+        $abstractUser->shouldReceive('getAvatar')->andReturn('https://lh3.googleusercontent.com/avatar.jpg');
+
+        $provider = \Mockery::mock(GoogleProvider::class);
+        $provider->shouldReceive('user')->andReturn($abstractUser);
+
+        Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+
+        $response = $this->get(route('auth.google.callback'));
+
+        $response->assertRedirect(route('home'));
+        $this->assertAuthenticated();
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'googleuser@example.com',
+            'google_id' => 'google-unique-id-12345',
+            'role' => 'customer',
+        ]);
+    }
+
+    public function test_google_oauth_falls_back_to_stateless_on_invalid_state(): void
+    {
+        $abstractUser = \Mockery::mock(\Laravel\Socialite\Two\User::class);
+        $abstractUser->shouldReceive('getId')->andReturn('google-unique-id-67890');
+        $abstractUser->shouldReceive('getName')->andReturn('Stateless User');
+        $abstractUser->shouldReceive('getEmail')->andReturn('stateless@example.com');
+        $abstractUser->shouldReceive('getAvatar')->andReturn(null);
+
+        $provider = \Mockery::mock(GoogleProvider::class);
+        $attempts = 0;
+        $provider->shouldReceive('user')->andReturnUsing(function () use (&$attempts, $abstractUser) {
+            $attempts++;
+            if ($attempts === 1) {
+                throw new InvalidStateException;
+            }
+
+            return $abstractUser;
+        });
+        $provider->shouldReceive('stateless')->once()->andReturnSelf();
+
+        Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+
+        $response = $this->get(route('auth.google.callback'));
+
+        $response->assertRedirect(route('home'));
+        $this->assertAuthenticated();
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'stateless@example.com',
+            'google_id' => 'google-unique-id-67890',
+        ]);
+    }
+
+    public function test_google_oauth_handles_failure_gracefully(): void
+    {
+        $provider = \Mockery::mock(GoogleProvider::class);
+        $provider->shouldReceive('user')->andThrow(new \Exception('Connection refused by Google'));
+
+        Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+
+        $response = $this->get(route('auth.google.callback'));
+
+        $response->assertRedirect(route('login'))
+            ->assertSessionHasErrors(['email']);
+        $this->assertGuest();
     }
 }

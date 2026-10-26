@@ -132,20 +132,12 @@
                             <label class="block text-xs font-semibold text-neutral-700 dark:text-slate-300 mb-1.5">
                                 Nomor Telepon
                             </label>
-                            <div class="flex items-center gap-2.5">
-                                <!-- Country code dropdown badge -->
-                                <div class="flex items-center gap-1 px-4 py-3 rounded-full border border-neutral-200 dark:border-slate-700 bg-neutral-50/60 dark:bg-slate-800 text-xs font-bold text-neutral-700 dark:text-slate-300 shrink-0 select-none shadow-sm">
-                                    <span>+62</span>
-                                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-neutral-400 dark:text-slate-500"></i>
-                                </div>
-                                <!-- Phone input -->
-                                <input type="text" 
-                                       name="phone" 
-                                       id="inputPhone"
-                                       value="{{ old('phone', $phone) }}" 
-                                       placeholder="88222010306"
-                                       class="w-full px-5 py-3 rounded-full border border-neutral-200 dark:border-slate-700 text-sm text-neutral-800 dark:text-white placeholder-neutral-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition bg-white dark:bg-slate-800">
-                            </div>
+                            <input type="tel" 
+                                   name="phone" 
+                                   id="inputPhone"
+                                   value="{{ old('phone', $phone) }}" 
+                                   placeholder="Contoh: 081234567890"
+                                   class="w-full px-5 py-3 rounded-full border border-neutral-200 dark:border-slate-700 text-sm text-neutral-800 dark:text-white placeholder-neutral-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition bg-white dark:bg-slate-800">
                         </div>
                     </div>
 
