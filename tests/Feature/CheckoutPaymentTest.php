@@ -6,10 +6,12 @@ use App\Models\Category;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\StockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CheckoutPaymentTest extends TestCase
@@ -106,8 +108,10 @@ class CheckoutPaymentTest extends TestCase
         ]);
 
         $product = $this->createProduct();
+        $idempotencyKey = (string) Str::uuid();
         $response = $this->withSession(['cart' => [$product->id => $this->cartItem($product)]])
             ->post(route('cart.checkout.process'), [
+                'idempotency_key' => $idempotencyKey,
                 'recipient_name' => 'Test Customer',
                 'phone' => '081234567890',
                 'payment_method' => 'midtrans_qris',
@@ -119,11 +123,30 @@ class CheckoutPaymentTest extends TestCase
         $this->assertSame('snap-token', $order->midtrans_token);
         $this->assertSame('https://app.sandbox.midtrans.com/snap/v3/redirection/snap-token', data_get($order->midtrans_payload, 'redirect_url'));
         $this->assertSame(3, $product->fresh()->stock);
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'type' => 'out',
+            'qty' => 2,
+            'stock_before' => 5,
+            'stock_after' => 3,
+        ]);
 
         Http::assertSent(fn (Request $request): bool => $request->url() === 'https://app.sandbox.midtrans.com/snap/v1/transactions'
                 && $request['enabled_payments'] === ['other_qris']
                 && $request['transaction_details']['gross_amount'] === 25000
         );
+
+        $this->post(route('cart.checkout.process'), [
+            'idempotency_key' => $idempotencyKey,
+            'recipient_name' => 'Test Customer',
+            'phone' => '081234567890',
+            'payment_method' => 'midtrans_qris',
+        ])->assertRedirect('https://app.sandbox.midtrans.com/snap/v3/redirection/snap-token');
+
+        $this->assertDatabaseCount('orders', 1);
+        $this->assertDatabaseCount('stock_movements', 1);
+        $this->assertSame(3, $product->fresh()->stock);
     }
 
     public function test_qris_checkout_rejects_a_production_key_in_sandbox_mode(): void
@@ -146,6 +169,115 @@ class CheckoutPaymentTest extends TestCase
         $response->assertSessionHas('error', 'Pesanan gagal dibuat. Periksa konfigurasi Midtrans atau coba kembali.');
         $this->assertDatabaseCount('orders', 0);
         $this->assertSame(5, $product->fresh()->stock);
+        $this->assertDatabaseCount('stock_movements', 0);
+    }
+
+    public function test_qris_checkout_rolls_back_reserved_stock_when_midtrans_connection_fails(): void
+    {
+        config([
+            'services.midtrans.server_key' => 'SB-Mid-server-test-key',
+            'services.midtrans.snap_url' => 'https://app.sandbox.midtrans.com',
+        ]);
+        Http::fake([
+            'app.sandbox.midtrans.com/snap/v1/transactions' => Http::failedConnection(),
+        ]);
+
+        $product = $this->createProduct();
+        $response = $this->withSession(['cart' => [$product->id => $this->cartItem($product)]])
+            ->post(route('cart.checkout.process'), [
+                'recipient_name' => 'Test Customer',
+                'phone' => '081234567890',
+                'payment_method' => 'midtrans_qris',
+            ]);
+
+        $response->assertRedirect()
+            ->assertSessionHas('error', 'Pesanan gagal dibuat. Periksa konfigurasi Midtrans atau coba kembali.');
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+        $this->assertSame(5, $product->fresh()->stock);
+    }
+
+    public function test_checkout_rejects_insufficient_stock_without_creating_an_order_or_movement(): void
+    {
+        $product = $this->createProduct();
+        $cartItem = $this->cartItem($product);
+        $cartItem['qty'] = 6;
+
+        $this->withSession(['cart' => [$product->id => $cartItem]])
+            ->from(route('cart.checkout'))
+            ->post(route('cart.checkout.process'), [
+                'recipient_name' => 'Test Customer',
+                'phone' => '081234567890',
+                'payment_method' => 'cash',
+            ])
+            ->assertRedirect(route('cart.checkout'))
+            ->assertSessionHasErrors('cart');
+
+        $this->assertDatabaseCount('orders', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+        $this->assertSame(5, $product->fresh()->stock);
+    }
+
+    public function test_expired_online_payment_restores_reserved_stock_once_and_ignores_late_settlement(): void
+    {
+        $serverKey = 'SB-Mid-server-test-key';
+        config(['services.midtrans.server_key' => $serverKey]);
+        $product = $this->createProduct();
+        $order = Order::query()->create([
+            'order_number' => 'ONL-EXPIRED-001',
+            'type' => 'online',
+            'subtotal' => 25000,
+            'discount' => 0,
+            'total' => 25000,
+            'payment_method' => 'midtrans_qris',
+            'payment_status' => 'unpaid',
+            'order_status' => 'pending_payment',
+            'midtrans_order_id' => 'ONL-EXPIRED-001',
+        ]);
+        app(StockService::class)->setStock(
+            $product,
+            3,
+            'out',
+            null,
+            'online_order:'.$order->order_number,
+            $order->id
+        );
+
+        $notification = [
+            'order_id' => $order->midtrans_order_id,
+            'status_code' => '200',
+            'gross_amount' => '25000.00',
+            'transaction_status' => 'expire',
+        ];
+        $notification['signature_key'] = hash(
+            'sha512',
+            $notification['order_id'].$notification['status_code'].$notification['gross_amount'].$serverKey
+        );
+
+        $this->postJson(route('midtrans.notification'), $notification)->assertOk();
+        $this->assertSame('expired', $order->fresh()->payment_status);
+        $this->assertSame(5, $product->fresh()->stock);
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'type' => 'return',
+            'qty' => 2,
+            'stock_before' => 3,
+            'stock_after' => 5,
+        ]);
+        $this->assertDatabaseCount('stock_movements', 2);
+
+        $notification['transaction_status'] = 'settlement';
+        $notification['signature_key'] = hash(
+            'sha512',
+            $notification['order_id'].$notification['status_code'].$notification['gross_amount'].$serverKey
+        );
+
+        $this->postJson(route('midtrans.notification'), $notification)->assertOk();
+
+        $this->assertSame('expired', $order->fresh()->payment_status);
+        $this->assertSame(5, $product->fresh()->stock);
+        $this->assertDatabaseCount('stock_movements', 2);
     }
 
     public function test_cash_checkout_does_not_call_midtrans(): void
@@ -223,6 +355,50 @@ class CheckoutPaymentTest extends TestCase
             ->assertOk();
         $this->assertSame('paid', $order->fresh()->payment_status);
         $this->assertSame('processing', $order->fresh()->order_status);
+    }
+
+    public function test_repeated_midtrans_settlement_notification_does_not_change_reserved_stock_again(): void
+    {
+        $serverKey = 'SB-Mid-server-test-key';
+        config(['services.midtrans.server_key' => $serverKey]);
+        $product = $this->createProduct();
+        $order = Order::query()->create([
+            'order_number' => 'ONL-REPEATED-SETTLEMENT',
+            'type' => 'online',
+            'subtotal' => 25000,
+            'discount' => 0,
+            'total' => 25000,
+            'payment_method' => 'midtrans_qris',
+            'payment_status' => 'unpaid',
+            'order_status' => 'pending_payment',
+            'midtrans_order_id' => 'ONL-REPEATED-SETTLEMENT',
+        ]);
+        app(StockService::class)->setStock(
+            $product,
+            3,
+            'out',
+            null,
+            'online_order:'.$order->order_number,
+            $order->id
+        );
+        $notification = [
+            'order_id' => $order->midtrans_order_id,
+            'status_code' => '200',
+            'gross_amount' => '25000.00',
+            'transaction_status' => 'settlement',
+        ];
+        $notification['signature_key'] = hash(
+            'sha512',
+            $notification['order_id'].$notification['status_code'].$notification['gross_amount'].$serverKey
+        );
+
+        $this->postJson(route('midtrans.notification'), $notification)->assertOk();
+        $this->postJson(route('midtrans.notification'), $notification)->assertOk();
+
+        $this->assertSame('paid', $order->fresh()->payment_status);
+        $this->assertSame('processing', $order->fresh()->order_status);
+        $this->assertSame(3, $product->fresh()->stock);
+        $this->assertDatabaseCount('stock_movements', 1);
     }
 
     public function test_returning_from_midtrans_refreshes_payment_status_from_gateway(): void

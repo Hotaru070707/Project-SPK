@@ -62,6 +62,13 @@ class CustomerOrderHistoryTest extends TestCase
             ->assertSee('ONL-FILTER-COMPLETE')
             ->assertDontSee('ONL-FILTER-PROCESSING')
             ->assertSee(route('orders.show', $matchingOrder->order_number), false);
+
+        $voidOrder = $this->createOrder($customer, 'ONL-FILTER-VOID', 'void', 'expired');
+        $this->get(route('orders.index', ['status' => 'cancelled']))
+            ->assertOk()
+            ->assertSee($voidOrder->order_number)
+            ->assertSee('Void (dibatalkan)')
+            ->assertDontSee('<option value="void"', false);
     }
 
     public function test_invalid_order_status_filter_is_rejected(): void
@@ -83,7 +90,7 @@ class CustomerOrderHistoryTest extends TestCase
         $response = $this->actingAs($customer)->get(route('orders.show', $order->order_number));
 
         $response->assertOk()
-            ->assertSee('Pembayaran: Berhasil')
+            ->assertSee('Pembayaran: Lunas')
             ->assertSee('Sedang Diproses')
             ->assertSee('Snapshot Product')
             ->assertSee('Rp 12.500')

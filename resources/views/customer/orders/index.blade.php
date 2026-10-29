@@ -38,7 +38,9 @@
             <select name="status" class="w-full rounded-full border border-neutral-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-neutral-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500">
                 <option value="">Semua status</option>
                 @foreach($orderStatusLabels as $value => $label)
+                    @if($value !== 'void')
                     <option value="{{ $value }}" @selected(request('status') === $value)>{{ $label }}</option>
+                    @endif
                 @endforeach
             </select>
         </label>
@@ -73,11 +75,11 @@
                         'pending_payment' => 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
                         default => 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
                     };
-                    $paymentStatusClass = $order->payment_status === 'paid'
+                    $paymentStatusClass = in_array($order->payment_status, ['expired', 'refunded'], true)
+                        ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                        : ($order->payment_status === 'paid'
                         ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                        : (in_array($order->payment_status, ['expired', 'refunded'], true)
-                            ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300');
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300');
                 @endphp
                 <article class="rounded-2xl border border-neutral-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm">
                     <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-neutral-100 dark:border-slate-800 pb-4">
@@ -88,7 +90,7 @@
                         </div>
                         <div class="flex flex-wrap gap-2">
                             <span class="rounded-full px-3 py-1 text-[11px] font-bold {{ $paymentStatusClass }}">
-                                Pembayaran: {{ $paymentStatusLabels[$order->payment_status] ?? strtoupper($order->payment_status) }}
+                                Pembayaran: {{ $order->payment_status_label }}
                             </span>
                             <span class="rounded-full px-3 py-1 text-[11px] font-bold {{ $orderStatusClass }}">
                                 {{ $orderStatusLabels[$order->order_status] ?? strtoupper($order->order_status) }}

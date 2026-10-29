@@ -34,7 +34,13 @@ class OrderController extends Controller
             ->where('customer_id', $request->user()->id)
             ->when(
                 $validated['status'] ?? null,
-                fn ($query, string $status) => $query->where('order_status', $status)
+                function ($query, string $status) {
+                    if ($status === 'cancelled') {
+                        return $query->whereIn('order_status', ['cancelled', 'void']);
+                    }
+
+                    return $query->where('order_status', $status);
+                }
             )
             ->when(
                 $validated['search'] ?? null,
@@ -107,7 +113,7 @@ class OrderController extends Controller
                 'shipped' => 'Dalam Pengiriman',
                 'completed' => 'Selesai',
                 'cancelled' => 'Dibatalkan',
-                'void' => 'Dibatalkan',
+                'void' => 'Void (dibatalkan)',
             ],
             [
                 'unpaid' => 'Belum Dibayar',

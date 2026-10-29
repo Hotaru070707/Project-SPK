@@ -53,7 +53,7 @@
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Status Pembayaran</p>
                 <span class="mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold {{ $order->payment_status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
-                    {{ $paymentStatusLabels[$order->payment_status] ?? strtoupper($order->payment_status) }}
+                    {{ $order->payment_status_label }}
                 </span>
             </div>
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -195,7 +195,7 @@
             </h2>
             <div class="mt-4 text-sm text-slate-600">
                 @if($order->payment_status !== 'paid')
-                    <p>Pembayaran belum dikonfirmasi. Status pesanan tidak dapat dilanjutkan oleh kasir.</p>
+                    <p>Pembayaran belum dikonfirmasi. Status pesanan tidak dapat dilanjutkan sampai pembayaran diterima.</p>
                 @elseif($order->order_status === 'processing')
                     <p>Pesanan sedang diproses. Setelah barang siap, tandai agar dapat diserahkan kepada pelanggan.</p>
                 @elseif($order->order_status === 'packed')
@@ -210,7 +210,22 @@
                 @endif
             </div>
 
-            @if($order->payment_status === 'paid' && $order->order_status === 'processing')
+            @if(
+                $order->type === 'online'
+                && $order->payment_method === 'manual_transfer'
+                && in_array($order->payment_status, ['unpaid', 'pending'], true)
+                && $order->order_status === 'pending_payment'
+            )
+                <p class="mt-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+                    Konfirmasi hanya setelah pembayaran dan nominalnya dipastikan pada mutasi rekening.
+                </p>
+                <form method="POST" action="{{ route('cashier.orders.payment.confirm', $order->order_number) }}" class="print-hidden mt-4" onsubmit="return confirm('Pastikan pembayaran sudah masuk dan nominalnya sesuai pada mutasi rekening. Konfirmasi pesanan ini sebagai lunas?')">
+                    @csrf
+                    <button type="submit" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-3 text-sm font-bold text-white">
+                        <i data-lucide="circle-check" class="w-4 h-4"></i> Konfirmasi Pembayaran
+                    </button>
+                </form>
+            @elseif($order->payment_status === 'paid' && $order->order_status === 'processing')
                 <form method="POST" action="{{ route('cashier.orders.ready', $order->order_number) }}" class="print-hidden mt-5" onsubmit="return confirm('Tandai pesanan ini siap diambil?')">
                     @csrf
                     <button type="submit" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-3 text-sm font-bold text-white">

@@ -6,9 +6,20 @@
         <h1 class="text-2xl sm:text-3xl font-bold font-heading text-neutral-900 dark:text-white tracking-tight">Checkout Pesanan</h1>
         <p class="text-xs sm:text-sm text-neutral-500 dark:text-slate-400 mt-1">Pesan online lewat sistem, lalu ambil belanjaan Anda langsung di Toko Mobeli tanpa antri.</p>
     </div>
+    @if ($errors->any())
+        <div role="alert" class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+            <p class="font-bold">Pesanan belum dapat diproses.</p>
+            <ul class="mt-1 list-inside list-disc">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     <form action="{{ route('cart.checkout.process') }}" method="POST">
         @csrf
+        <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key', $idempotencyKey) }}">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             <!-- Form Pengambilan & Pembayaran -->
             <div class="lg:col-span-8 space-y-6">

@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $title ?? 'Admin Mobeli - SPK Kelontong' }}</title>
     <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
-    
+
     <script>
         if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark');
@@ -109,13 +109,13 @@
                         <i data-lucide="boxes" class="w-4 h-4"></i> Stok Masuk & Mutasi
                     </a>
                     <a href="{{ route('admin.orders') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.orders*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
-                        <i data-lucide="shopping-bag" class="w-4 h-4"></i> Pesanan & Verifikasi Bukti
+                        <i data-lucide="shopping-bag" class="w-4 h-4"></i> Pesanan & Transaksi
                     </a>
                     <a href="{{ route('admin.reports') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.reports*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
                         <i data-lucide="chart-no-axes-combined" class="w-4 h-4"></i> Laporan
                     </a>
                     <a href="{{ route('admin.customers') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.customers*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
-                        <i data-lucide="users" class="w-4 h-4"></i> Pelanggan & Member
+                        <i data-lucide="users" class="w-4 h-4"></i> Pelanggan
                     </a>
                     <a href="{{ route('admin.users') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.users*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
                         <i data-lucide="user-round-cog" class="w-4 h-4"></i> Akun Kasir
@@ -230,7 +230,7 @@
             const now = new Date();
             const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
             const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-            
+
             const dayName = days[now.getDay()];
             const date = String(now.getDate()).padStart(2, '0');
             const month = months[now.getMonth()];

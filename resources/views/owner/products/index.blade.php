@@ -269,6 +269,7 @@
             @csrf
             @method('PUT')
             <input type="hidden" name="edit_product_id" id="edit_product_id" value="">
+            <input type="hidden" name="adjust_stock" id="edit_adjust_stock" value="0">
 
             <!-- Upload / Ganti Foto Produk -->
             <div>
@@ -415,6 +416,7 @@
         form.action = `/admin/produk/${product.id}`;
 
         document.getElementById('edit_product_id').value = product.id;
+        document.getElementById('edit_adjust_stock').value = '0';
         document.getElementById('edit_name').value = product.name || '';
         document.getElementById('edit_category_id').value = product.category_id || '';
         document.getElementById('edit_barcode').value = product.barcode || '';
@@ -461,6 +463,7 @@
     function updateStockReasonRequirement() {
         const stockField = document.getElementById('edit_stock');
         const reasonField = document.getElementById('edit_stock_change_reason');
+        document.getElementById('edit_adjust_stock').value = Number(stockField.value) === Number(stockField.dataset.originalStock) ? '0' : '1';
         reasonField.required = Number(stockField.value) !== Number(stockField.dataset.originalStock);
     }
 

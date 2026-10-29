@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
-use App\Models\StockMovement;
 use App\Models\User;
+use App\Services\StockService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
@@ -60,7 +60,7 @@ class CashierController extends Controller
         return view('cashier.pos', compact('products', 'customers', 'transactionKey', 'cashierId'));
     }
 
-    public function storeTransaction(Request $request)
+    public function storeTransaction(Request $request, StockService $stockService)
     {
         $idempotencyKey = $request->validate([
             'idempotency_key' => ['required', 'uuid'],
@@ -101,7 +101,7 @@ class CashierController extends Controller
             ->values();
 
         try {
-            $receipt = DB::transaction(function () use ($validated, $items, $idempotencyKey): array {
+            $receipt = DB::transaction(function () use ($validated, $items, $idempotencyKey, $stockService): array {
                 $products = Product::query()
                     ->whereIn('id', $items->pluck('id'))
                     ->where('is_active', true)
@@ -159,7 +159,6 @@ class CashierController extends Controller
                 foreach ($items as $item) {
                     $product = $products[$item['id']];
                     $price = (float) $product->sell_price;
-                    $stockBefore = $product->stock;
                     OrderItem::create([
                         'order_id' => $order->id,
                         'product_id' => $product->id,
@@ -170,18 +169,14 @@ class CashierController extends Controller
                         'subtotal' => $price * $item['qty'],
                     ]);
 
-                    $product->decrement('stock', $item['qty']);
-
-                    StockMovement::create([
-                        'product_id' => $product->id,
-                        'user_id' => Auth::id(),
-                        'order_id' => $order->id,
-                        'type' => 'out',
-                        'qty' => $item['qty'],
-                        'stock_before' => $stockBefore,
-                        'stock_after' => $product->fresh()->stock,
-                        'reason' => 'offline_sale',
-                    ]);
+                    $stockService->setStock(
+                        $product,
+                        $product->stock - $item['qty'],
+                        'out',
+                        Auth::id(),
+                        'offline_sale',
+                        $order->id
+                    );
                 }
 
                 return ['order_id' => $order->id];

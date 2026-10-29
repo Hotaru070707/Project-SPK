@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\TopsisResult;
 use App\Models\User;
+use App\Services\StockService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -79,7 +80,7 @@ class AdminController extends Controller
         return view('owner.products.index', compact('products', 'categories'));
     }
 
-    public function storeProduct(Request $request): RedirectResponse
+    public function storeProduct(Request $request, StockService $stockService): RedirectResponse
     {
         $validated = $request->validate([
             'category_id' => 'required|exists:categories,id',
@@ -102,25 +103,26 @@ class AdminController extends Controller
             $validated['image'] = $path;
         }
 
-        DB::transaction(function () use ($validated): void {
+        $initialStock = (int) $validated['stock'];
+        $validated['stock'] = 0;
+
+        DB::transaction(function () use ($validated, $initialStock, $stockService): void {
             $product = Product::query()->create($validated);
-            if ($product->stock > 0) {
-                StockMovement::query()->create([
-                    'product_id' => $product->id,
-                    'user_id' => auth()->id(),
-                    'type' => 'in',
-                    'qty' => $product->stock,
-                    'stock_before' => 0,
-                    'stock_after' => $product->stock,
-                    'reason' => 'Stok awal saat produk dibuat',
-                ]);
+            if ($initialStock > 0) {
+                $stockService->setStock(
+                    $product,
+                    $initialStock,
+                    'in',
+                    auth()->id(),
+                    'Stok awal saat produk dibuat'
+                );
             }
         });
 
         return redirect()->route('admin.products')->with('success', 'Produk sembako berhasil ditambahkan!');
     }
 
-    public function updateProduct(Request $request, int $id): RedirectResponse
+    public function updateProduct(Request $request, int $id, StockService $stockService): RedirectResponse
     {
         $product = Product::findOrFail($id);
 
@@ -134,6 +136,7 @@ class AdminController extends Controller
             'min_stock' => 'required|integer|min:0',
             'supplier_lead_time_days' => 'required|integer|min:0|max:365',
             'stock_change_reason' => 'nullable|string|max:255',
+            'adjust_stock' => 'nullable|boolean',
             'unit' => 'required|string|max:20',
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp,gif|max:5120',
@@ -152,10 +155,16 @@ class AdminController extends Controller
             $validated['image'] = null;
         }
 
-        DB::transaction(function () use ($product, $validated): void {
+        DB::transaction(function () use ($product, $validated, $request, $stockService): void {
             $lockedProduct = Product::query()->lockForUpdate()->findOrFail($product->id);
             $stockBefore = $lockedProduct->stock;
-            $stockAfter = (int) $validated['stock'];
+            $shouldAdjustStock = $request->boolean('adjust_stock')
+                || filled($validated['stock_change_reason'] ?? null)
+                || (
+                    ! $request->exists('adjust_stock')
+                    && (int) $validated['stock'] !== $stockBefore
+                );
+            $stockAfter = $shouldAdjustStock ? (int) $validated['stock'] : $stockBefore;
             $reason = $validated['stock_change_reason'] ?? null;
             if ($stockAfter !== $stockBefore && blank($reason)) {
                 throw ValidationException::withMessages([
@@ -164,18 +173,18 @@ class AdminController extends Controller
             }
 
             unset($validated['stock_change_reason']);
+            unset($validated['adjust_stock']);
+            unset($validated['stock']);
             $lockedProduct->update($validated);
 
             if ($stockAfter !== $stockBefore) {
-                StockMovement::query()->create([
-                    'product_id' => $lockedProduct->id,
-                    'user_id' => auth()->id(),
-                    'type' => 'adjustment',
-                    'qty' => $stockAfter - $stockBefore,
-                    'stock_before' => $stockBefore,
-                    'stock_after' => $stockAfter,
-                    'reason' => $reason,
-                ]);
+                $stockService->setStock(
+                    $lockedProduct,
+                    $stockAfter,
+                    'adjustment',
+                    auth()->id(),
+                    $reason
+                );
             }
         });
 
@@ -213,34 +222,179 @@ class AdminController extends Controller
         return redirect()->route('admin.categories')->with('success', 'Kategori baru berhasil ditambahkan!');
     }
 
-    public function orders(): View
+    public function orders(Request $request): View
     {
-        $orders = Order::with(['customer', 'items.product'])->latest()->paginate(15);
+        $validated = $request->validate([
+            'type' => ['nullable', Rule::in(['online', 'offline'])],
+            'payment_status' => ['nullable', Rule::in(['unpaid', 'pending', 'paid', 'expired', 'refunded'])],
+            'order_status' => ['nullable', Rule::in(['pending_payment', 'processing', 'packed', 'shipped', 'completed', 'cancelled', 'void'])],
+            'start_date' => ['nullable', 'date_format:Y-m-d'],
+            'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
 
-        return view('owner.orders.index', compact('orders'));
+        $ordersQuery = Order::query()->with(['customer', 'cashier', 'items.product']);
+
+        $orders = $ordersQuery
+            ->when(
+                $validated['type'] ?? null,
+                fn (Builder $query, string $type): Builder => $query->where('type', $type)
+            )
+            ->when(
+                $validated['payment_status'] ?? null,
+                fn (Builder $query, string $paymentStatus): Builder => $query->where('payment_status', $paymentStatus)
+            )
+            ->when(
+                $validated['order_status'] ?? null,
+                function (Builder $query, string $status): Builder {
+                    if ($status === 'cancelled') {
+                        return $query->whereIn('order_status', ['cancelled', 'void']);
+                    }
+
+                    return $query->where('order_status', $status);
+                }
+            )
+            ->when(
+                $validated['start_date'] ?? null,
+                fn (Builder $query, string $date): Builder => $query->whereDate('created_at', '>=', $date)
+            )
+            ->when(
+                $validated['end_date'] ?? null,
+                fn (Builder $query, string $date): Builder => $query->whereDate('created_at', '<=', $date)
+            )
+            ->when(
+                $validated['search'] ?? null,
+                function (Builder $query, string $search): Builder {
+                    return $query->where(function (Builder $query) use ($search): void {
+                        $query->where('order_number', 'like', '%'.$search.'%')
+                            ->orWhere('notes', 'like', '%'.$search.'%')
+                            ->orWhereHas('customer', fn (Builder $customerQuery): Builder => $customerQuery->where('name', 'like', '%'.$search.'%'));
+                    });
+                }
+            )
+            ->latest('created_at')
+            ->latest('id')
+            ->paginate(15)
+            ->withQueryString();
+
+        $summary = [
+            'total' => Order::query()->count(),
+            'awaiting_payment' => Order::query()
+                ->where('type', 'online')
+                ->whereIn('payment_status', ['unpaid', 'pending'])
+                ->where('order_status', 'pending_payment')
+                ->count(),
+            'processing' => Order::query()->where('order_status', 'processing')->count(),
+            'completed' => Order::query()->where('order_status', 'completed')->count(),
+        ];
+
+        $orderStatusLabels = [
+            'pending_payment' => 'Menunggu Pembayaran',
+            'processing' => 'Diproses',
+            'packed' => 'Siap Diambil',
+            'shipped' => 'Dalam Pengiriman',
+            'completed' => 'Selesai',
+            'cancelled' => 'Dibatalkan',
+            'void' => 'Void (dibatalkan)',
+        ];
+        $paymentMethodLabels = [
+            'cash' => 'Tunai',
+            'manual_transfer' => 'Transfer Manual',
+            'midtrans_qris' => 'Midtrans QRIS',
+            'midtrans_va' => 'Midtrans VA',
+            'midtrans_ewallet' => 'Midtrans E-Wallet',
+        ];
+
+        return view('owner.orders.index', compact(
+            'orders',
+            'summary',
+            'validated',
+            'orderStatusLabels',
+            'paymentMethodLabels'
+        ));
     }
 
-    public function verifyOrder(Request $request, int $id): RedirectResponse
+    public function showOrder(Order $order): View
     {
-        $order = Order::findOrFail($id);
-        $action = $request->input('action'); // approve / reject
+        $order->load([
+            'customer',
+            'cashier',
+            'paymentReviewer',
+            'items.product',
+            'stockMovements.product',
+            'stockMovements.user',
+        ]);
 
-        if ($action === 'approve') {
-            $order->update([
+        return view('owner.orders.show', compact('order'));
+    }
+
+    public function confirmManualTransfer(Order $order): RedirectResponse
+    {
+        $result = DB::transaction(function () use ($order): array {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+            if (
+                $lockedOrder->type !== 'online'
+                || $lockedOrder->payment_method !== 'manual_transfer'
+                || $lockedOrder->order_status !== 'pending_payment'
+                || ! in_array($lockedOrder->payment_status, ['unpaid', 'pending'], true)
+            ) {
+                return [
+                    'error' => "Pesanan #{$lockedOrder->order_number} bukan pembayaran transfer manual yang masih menunggu konfirmasi.",
+                ];
+            }
+
+            $lockedOrder->update([
                 'payment_status' => 'paid',
                 'order_status' => 'processing',
+                'payment_verification_status' => 'approved',
+                'payment_rejection_reason' => null,
+                'payment_reviewed_by' => auth()->id(),
+                'payment_reviewed_at' => now(),
                 'paid_at' => now(),
             ]);
-            $msg = "Pesanan #{$order->order_number} berhasil disetujui & diverifikasi LUNAS!";
-        } else {
-            $order->update([
-                'payment_status' => 'unpaid',
-                'order_status' => 'cancelled',
-            ]);
-            $msg = "Pesanan #{$order->order_number} ditolak.";
+
+            return ['success' => "Pembayaran transfer manual pesanan #{$lockedOrder->order_number} dikonfirmasi lunas."];
+        });
+
+        if (isset($result['error'])) {
+            return redirect()->back()->with('error', $result['error']);
         }
 
-        return redirect()->back()->with('success', $msg);
+        return redirect()->back()->with('success', $result['success']);
+    }
+
+    public function cancelManualTransfer(Order $order, StockService $stockService): RedirectResponse
+    {
+        $result = DB::transaction(function () use ($order, $stockService): array {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+            if (
+                $lockedOrder->type !== 'online'
+                || $lockedOrder->payment_method !== 'manual_transfer'
+                || $lockedOrder->order_status !== 'pending_payment'
+                || ! in_array($lockedOrder->payment_status, ['unpaid', 'pending'], true)
+            ) {
+                return ['error' => "Pesanan #{$lockedOrder->order_number} tidak dapat dibatalkan dari status saat ini."];
+            }
+
+            $stockService->restoreUnpaidOrderStock(
+                $lockedOrder,
+                auth()->id(),
+                'online_order_cancelled:'.$lockedOrder->order_number
+            );
+            $lockedOrder->update([
+                'order_status' => 'cancelled',
+                'payment_verification_status' => 'not_required',
+                'payment_rejection_reason' => null,
+            ]);
+
+            return ['success' => "Pesanan #{$lockedOrder->order_number} dibatalkan dan reservasi stok dilepas."];
+        });
+
+        if (isset($result['error'])) {
+            return redirect()->back()->with('error', $result['error']);
+        }
+
+        return redirect()->back()->with('success', $result['success']);
     }
 
     public function customers(): View
@@ -254,14 +408,14 @@ class AdminController extends Controller
     {
         $products = Product::query()->where('is_active', true)->orderBy('name')->get();
         $movements = StockMovement::query()
-            ->with(['product', 'user'])
+            ->with(['product', 'user', 'order'])
             ->latest()
             ->paginate(20);
 
         return view('owner.stock.index', compact('products', 'movements'));
     }
 
-    public function storeStockMovement(Request $request): RedirectResponse
+    public function storeStockMovement(Request $request, StockService $stockService): RedirectResponse
     {
         $validated = $request->validate([
             'product_id' => ['required', 'exists:products,id'],
@@ -276,7 +430,7 @@ class AdminController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($validated): void {
+        DB::transaction(function () use ($validated, $stockService): void {
             $product = Product::query()->lockForUpdate()->findOrFail($validated['product_id']);
             $stockBefore = $product->stock;
             $stockAfter = match ($validated['type']) {
@@ -291,18 +445,13 @@ class AdminController extends Controller
                 ]);
             }
 
-            $product->update(['stock' => $stockAfter]);
-            StockMovement::query()->create([
-                'product_id' => $product->id,
-                'user_id' => auth()->id(),
-                'type' => $validated['type'],
-                'qty' => $validated['type'] === 'adjustment'
-                    ? $stockAfter - $stockBefore
-                    : $validated['qty'],
-                'stock_before' => $stockBefore,
-                'stock_after' => $stockAfter,
-                'reason' => $validated['reason'],
-            ]);
+            $stockService->setStock(
+                $product,
+                $stockAfter,
+                $validated['type'],
+                auth()->id(),
+                $validated['reason']
+            );
         });
 
         return redirect()->route('admin.stock')->with('success', 'Pergerakan stok berhasil dicatat.');

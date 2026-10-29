@@ -5,11 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\User;
 use App\Services\MidtransSnapService;
+use App\Services\StockService;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class CartController extends Controller
 {
@@ -128,105 +134,183 @@ class CartController extends Controller
             return redirect()->route('cart.index')->with('error', 'Keranjang belanja Anda masih kosong.');
         }
 
+        $idempotencyKey = session()->get('checkout_idempotency_key');
+        if (! is_string($idempotencyKey)) {
+            $idempotencyKey = (string) Str::uuid();
+            session()->put('checkout_idempotency_key', $idempotencyKey);
+        }
+
         $subtotal = 0;
         foreach ($cart as $item) {
             $subtotal += $item['price'] * $item['qty'];
         }
 
-        return view('customer.cart.checkout', compact('cart', 'subtotal'));
+        return view('customer.cart.checkout', compact('cart', 'subtotal', 'idempotencyKey'));
     }
 
-    public function processCheckout(Request $request, MidtransSnapService $midtrans)
+    public function processCheckout(Request $request, MidtransSnapService $midtrans, StockService $stockService)
     {
+        $validated = $request->validate([
+            'idempotency_key' => ['nullable', 'uuid'],
+            'recipient_name' => ['required', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:20'],
+            'notes' => ['nullable', 'string', 'max:500'],
+            'payment_method' => ['required', 'in:midtrans_qris,cash'],
+        ]);
+        $validated['idempotency_key'] = $validated['idempotency_key']
+            ?? session()->get('checkout_idempotency_key')
+            ?? (string) Str::uuid();
+        session()->put('checkout_idempotency_key', $validated['idempotency_key']);
+
+        $existingOrder = Order::query()
+            ->where('idempotency_key', $validated['idempotency_key'])
+            ->where('customer_id', Auth::id())
+            ->first();
+
+        if ($existingOrder !== null) {
+            return $this->checkoutResponse($existingOrder);
+        }
+
         $cart = session()->get('cart', []);
         if (empty($cart)) {
             return redirect()->route('cart.index')->with('error', 'Keranjang belanja kosong.');
         }
 
-        $request->validate([
-            'recipient_name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20',
-            'notes' => 'nullable|string|max:500',
-            'payment_method' => 'required|in:midtrans_qris,cash',
-        ]);
+        $items = collect($cart)
+            ->map(fn (array $item, string|int $key): array => [
+                'product_id' => (int) ($item['id'] ?? $key),
+                'qty' => filter_var($item['qty'] ?? null, FILTER_VALIDATE_INT),
+            ])
+            ->sortBy('product_id')
+            ->values();
 
-        $subtotal = 0;
-        foreach ($cart as $item) {
-            $subtotal += $item['price'] * $item['qty'];
-        }
-
-        $discount = 0;
-        $total = (int) round($subtotal);
-        $orderNumber = 'ONL-'.date('Ymd').'-'.strtoupper(Str::random(8));
-        $midtransRedirectUrl = null;
-
-        $orderNotes = "Pemesan: {$request->recipient_name} ({$request->phone})";
-        if (! empty($request->notes)) {
-            $orderNotes .= " | Catatan: {$request->notes}";
-        }
-
-        DB::beginTransaction();
-        try {
-            $order = Order::create([
-                'order_number' => $orderNumber,
-                'type' => 'online',
-                'customer_id' => Auth::id(),
-                'subtotal' => $subtotal,
-                'discount' => $discount,
-                'total' => $total,
-                'payment_method' => $request->payment_method,
-                'payment_status' => $request->payment_method === 'cash' ? 'pending' : 'unpaid',
-                'order_status' => 'pending_payment',
-                'midtrans_order_id' => $request->payment_method === 'midtrans_qris' ? $orderNumber : null,
-                'notes' => $orderNotes,
+        if ($items->contains(fn (array $item): bool => $item['product_id'] < 1 || $item['qty'] === false || $item['qty'] < 1)) {
+            throw ValidationException::withMessages([
+                'cart' => ['Keranjang berisi jumlah atau produk yang tidak valid. Muat ulang keranjang dan coba kembali.'],
             ]);
+        }
 
-            foreach ($cart as $item) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $item['id'],
-                    'product_name' => $item['name'],
-                    'price' => $item['price'],
-                    'cost_price' => $item['cost_price'] ?? 0,
-                    'qty' => $item['qty'],
-                    'subtotal' => $item['price'] * $item['qty'],
-                ]);
-
-                // Kurangi stok produk
-                $product = Product::find($item['id']);
-                if ($product) {
-                    $product->decrement('stock', $item['qty']);
+        try {
+            $order = DB::transaction(function () use ($validated, $items, $midtrans, $stockService): Order {
+                if (Auth::check()) {
+                    User::query()->lockForUpdate()->findOrFail(Auth::id());
                 }
-            }
 
-            if ($request->payment_method === 'midtrans_qris') {
-                $payment = $midtrans->createTransaction($order, $request->recipient_name, $request->phone);
-                $midtransRedirectUrl = $payment['redirect_url'];
+                $existingOrder = Order::query()
+                    ->where('idempotency_key', $validated['idempotency_key'])
+                    ->where('customer_id', Auth::id())
+                    ->first();
+                if ($existingOrder !== null) {
+                    return $existingOrder;
+                }
 
-                $order->update([
-                    'midtrans_token' => $payment['token'],
-                    'midtrans_payload' => ['redirect_url' => $payment['redirect_url']],
+                $products = Product::query()
+                    ->whereIn('id', $items->pluck('product_id'))
+                    ->where('is_active', true)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                if ($products->count() !== $items->count()) {
+                    throw ValidationException::withMessages([
+                        'cart' => ['Satu atau beberapa produk sudah tidak tersedia. Muat ulang keranjang.'],
+                    ]);
+                }
+
+                $stockIssues = $items
+                    ->filter(fn (array $item): bool => $products[$item['product_id']]->stock < $item['qty'])
+                    ->map(fn (array $item): string => $products[$item['product_id']]->name)
+                    ->unique()
+                    ->values();
+                if ($stockIssues->isNotEmpty()) {
+                    throw ValidationException::withMessages([
+                        'cart' => ['Stok tidak mencukupi untuk: '.$stockIssues->implode(', ').'.'],
+                    ]);
+                }
+
+                $subtotal = $items->sum(
+                    fn (array $item): float => (float) $products[$item['product_id']]->sell_price * $item['qty']
+                );
+                $total = (int) round($subtotal);
+                $orderNumber = 'ONL-'.now()->format('Ymd').'-'.Str::upper(Str::random(8));
+                $orderNotes = "Pemesan: {$validated['recipient_name']} ({$validated['phone']})";
+                if (! empty($validated['notes'])) {
+                    $orderNotes .= " | Catatan: {$validated['notes']}";
+                }
+
+                $order = Order::query()->create([
+                    'order_number' => $orderNumber,
+                    'idempotency_key' => $validated['idempotency_key'],
+                    'type' => 'online',
+                    'customer_id' => Auth::id(),
+                    'subtotal' => $subtotal,
+                    'discount' => 0,
+                    'total' => $total,
+                    'payment_method' => $validated['payment_method'],
+                    'payment_status' => $validated['payment_method'] === 'cash' ? 'pending' : 'unpaid',
+                    'order_status' => 'pending_payment',
+                    'midtrans_order_id' => $validated['payment_method'] === 'midtrans_qris' ? $orderNumber : null,
+                    'notes' => $orderNotes,
                 ]);
-            }
 
-            DB::commit();
+                foreach ($items as $item) {
+                    $product = $products[$item['product_id']];
+                    OrderItem::query()->create([
+                        'order_id' => $order->id,
+                        'product_id' => $product->id,
+                        'product_name' => $product->name,
+                        'price' => $product->sell_price,
+                        'cost_price' => $product->cost_price,
+                        'qty' => $item['qty'],
+                        'subtotal' => (float) $product->sell_price * $item['qty'],
+                    ]);
 
-            // Clear Cart
-            session()->forget('cart');
-            session()->forget('cart_count');
+                    $stockService->setStock(
+                        $product,
+                        $product->stock - $item['qty'],
+                        'out',
+                        Auth::id(),
+                        'online_order:'.$order->order_number,
+                        $order->id
+                    );
+                }
 
-            if ($midtransRedirectUrl !== null) {
-                return redirect()->away($midtransRedirectUrl);
-            }
+                if ($validated['payment_method'] === 'midtrans_qris') {
+                    $payment = $midtrans->createTransaction($order, $validated['recipient_name'], $validated['phone']);
+                    $order->update([
+                        'midtrans_token' => $payment['token'],
+                        'midtrans_payload' => ['redirect_url' => $payment['redirect_url']],
+                    ]);
+                }
 
-            return redirect()->route('orders.show', $order->order_number)
-                ->with('success', "Pesanan #{$order->order_number} berhasil dibuat!");
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            report($e);
+                return $order;
+            });
+        } catch (ConnectionException|RuntimeException $exception) {
+            report($exception);
 
             return back()->with('error', 'Pesanan gagal dibuat. Periksa konfigurasi Midtrans atau coba kembali.');
         }
+
+        session()->forget(['cart', 'cart_count']);
+        session()->put('checkout_idempotency_key', (string) Str::uuid());
+
+        return $this->checkoutResponse($order, true);
+    }
+
+    private function checkoutResponse(Order $order, bool $isNewOrder = false): RedirectResponse
+    {
+        $redirectUrl = data_get($order->midtrans_payload, 'redirect_url');
+        if (
+            $order->payment_method === 'midtrans_qris'
+            && is_string($redirectUrl)
+            && $order->payment_status !== 'expired'
+            && $order->order_status !== 'cancelled'
+        ) {
+            return redirect()->away($redirectUrl);
+        }
+
+        return redirect()->route('orders.show', $order->order_number)
+            ->with($isNewOrder ? 'success' : 'info', "Pesanan #{$order->order_number} berhasil dibuat.");
     }
 }

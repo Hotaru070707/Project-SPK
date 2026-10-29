@@ -74,6 +74,8 @@ Route::middleware(['auth', 'role:cashier,owner'])->prefix('kasir')->name('cashie
     Route::post('/pos/transaksi', [CashierController::class, 'storeTransaction'])->name('store');
     Route::get('/transaksi', [CashierController::class, 'transactions'])->name('transactions');
     Route::get('/pesanan/{order:order_number}', [CashierController::class, 'showOrder'])->name('orders.show');
+    Route::post('/pesanan/{order:order_number}/konfirmasi-pembayaran', [AdminController::class, 'confirmManualTransfer'])
+        ->name('orders.payment.confirm');
     Route::post('/pesanan/{order:order_number}/siap-diambil', [CashierController::class, 'markOrderReadyForPickup'])
         ->middleware('role:cashier')
         ->name('orders.ready');
@@ -97,9 +99,13 @@ Route::middleware(['auth', 'role:owner'])->prefix('admin')->name('admin.')->grou
     Route::get('/stok', [AdminController::class, 'stockMovements'])->name('stock');
     Route::post('/stok', [AdminController::class, 'storeStockMovement'])->name('stock.store');
 
-    // Orders & Proofs
+    // Orders & Transactions
     Route::get('/pesanan', [AdminController::class, 'orders'])->name('orders');
-    Route::post('/pesanan/{id}/verifikasi', [AdminController::class, 'verifyOrder'])->name('orders.verify');
+    Route::get('/pesanan/{order}', [AdminController::class, 'showOrder'])->name('orders.show');
+    Route::post('/pesanan/{order}/konfirmasi-pembayaran', [AdminController::class, 'confirmManualTransfer'])
+        ->name('orders.payment.confirm');
+    Route::post('/pesanan/{order}/batalkan', [AdminController::class, 'cancelManualTransfer'])
+        ->name('orders.cancel');
 
     // Customers
     Route::get('/pelanggan', [AdminController::class, 'customers'])->name('customers');

@@ -4,12 +4,15 @@ namespace App\Services;
 
 use App\Models\Order;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 use RuntimeException;
 
 class MidtransSnapService
 {
+    public function __construct(private StockService $stockService) {}
+
     public function createTransaction(
         Order $order,
         string $recipientName,
@@ -244,18 +247,35 @@ class MidtransSnapService
                 'payment_status' => 'pending',
             ],
 
-            'expire' => [
+            'expire', 'deny', 'cancel' => [
                 'payment_status' => 'expired',
+                'order_status' => 'cancelled',
             ],
 
             default => null,
         };
 
         if ($attributes !== null) {
-            Order::query()
-                ->whereKey($order->id)
-                ->where('payment_status', '!=', 'paid')
-                ->update($attributes);
+            DB::transaction(function () use ($order, $attributes, $transactionStatus): void {
+                $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+                if (
+                    $lockedOrder->payment_status === 'paid'
+                    || in_array($lockedOrder->payment_status, ['expired', 'refunded'], true)
+                    || in_array($lockedOrder->order_status, ['cancelled', 'void'], true)
+                ) {
+                    return;
+                }
+
+                if (in_array($transactionStatus, ['expire', 'deny', 'cancel'], true)) {
+                    $this->stockService->restoreUnpaidOrderStock(
+                        $lockedOrder,
+                        null,
+                        'online_payment_'.$transactionStatus.':'.$lockedOrder->order_number
+                    );
+                }
+
+                $lockedOrder->update($attributes);
+            });
         }
 
         return true;

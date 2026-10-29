@@ -29,6 +29,10 @@ class Order extends Model
         'midtrans_token',
         'midtrans_payload',
         'payment_proof',
+        'payment_verification_status',
+        'payment_rejection_reason',
+        'payment_reviewed_by',
+        'payment_reviewed_at',
         'shipping_tracking',
         'notes',
         'paid_at',
@@ -43,8 +47,21 @@ class Order extends Model
             'cash_given' => 'decimal:2',
             'change_amount' => 'decimal:2',
             'paid_at' => 'datetime',
+            'payment_reviewed_at' => 'datetime',
             'midtrans_payload' => 'array',
         ];
+    }
+
+    public function getPaymentStatusLabelAttribute(): string
+    {
+        return match ($this->payment_status) {
+            'unpaid' => 'Belum Dibayar',
+            'pending' => 'Menunggu Pembayaran',
+            'paid' => 'Lunas',
+            'expired' => 'Kedaluwarsa',
+            'refunded' => 'Dikembalikan',
+            default => strtoupper($this->payment_status),
+        };
     }
 
     public function customer()
@@ -70,5 +87,15 @@ class Order extends Model
     public function items()
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function stockMovements()
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
+    public function paymentReviewer()
+    {
+        return $this->belongsTo(User::class, 'payment_reviewed_by');
     }
 }

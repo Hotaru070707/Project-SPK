@@ -142,6 +142,7 @@
                         <th class="p-3 text-right">Perubahan</th>
                         <th class="p-3 text-center">Sebelum → Sesudah</th>
                         <th class="p-3">Alasan</th>
+                        <th class="p-3">Referensi pesanan</th>
                         <th class="p-3">Pengguna</th>
                     </tr>
                 </thead>
@@ -154,10 +155,11 @@
                             <td class="p-3 text-right font-mono">{{ $movement->type === 'adjustment' ? ($movement->qty > 0 ? '+' : '') : ($movement->type === 'out' ? '-' : '+') }}{{ abs($movement->qty) }}</td>
                             <td class="p-3 text-center font-mono">{{ $movement->stock_before }} → {{ $movement->stock_after }}</td>
                             <td class="p-3">{{ $movement->reason ?: '-' }}</td>
+                            <td class="p-3 font-mono">{{ $movement->order?->order_number ?? '-' }}</td>
                             <td class="p-3">{{ $movement->user->name ?? 'Sistem' }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="p-8 text-center text-neutral-500">Belum ada pergerakan stok.</td></tr>
+                        <tr><td colspan="8" class="p-8 text-center text-neutral-500">Belum ada pergerakan stok.</td></tr>
                     @endforelse
                 </tbody>
             </table>

@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\StockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -57,6 +58,61 @@ class AdminOperationsTest extends TestCase
 
         $this->assertSame(2, $product->fresh()->stock);
         $this->assertDatabaseCount('stock_movements', 0);
+    }
+
+    public function test_owner_cancellation_releases_online_stock_reservation_once(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner', 'is_active' => true]);
+        $product = $this->createProduct(stock: 5);
+        $order = Order::query()->create([
+            'order_number' => 'ONL-REJECT-0001',
+            'type' => 'online',
+            'subtotal' => 100,
+            'discount' => 0,
+            'total' => 100,
+            'payment_method' => 'manual_transfer',
+            'payment_status' => 'pending',
+            'order_status' => 'pending_payment',
+            'payment_verification_status' => 'pending',
+        ]);
+        app(StockService::class)->setStock(
+            $product,
+            3,
+            'out',
+            null,
+            'online_order:'.$order->order_number,
+            $order->id
+        );
+
+        $this->actingAs($owner)
+            ->from(route('admin.orders'))
+            ->post(route('admin.orders.cancel', $order))
+            ->assertRedirect(route('admin.orders'))
+            ->assertSessionHas('success', "Pesanan #{$order->order_number} dibatalkan dan reservasi stok dilepas.");
+
+        $this->assertSame('cancelled', $order->fresh()->order_status);
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame('not_required', $order->fresh()->payment_verification_status);
+        $this->assertNull($order->fresh()->payment_rejection_reason);
+        $this->assertSame(5, $product->fresh()->stock);
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $product->id,
+            'order_id' => $order->id,
+            'user_id' => $owner->id,
+            'type' => 'return',
+            'qty' => 2,
+            'stock_before' => 3,
+            'stock_after' => 5,
+        ]);
+        $this->assertDatabaseCount('stock_movements', 2);
+
+        $this->from(route('admin.orders'))
+            ->post(route('admin.orders.cancel', $order))
+            ->assertRedirect(route('admin.orders'))
+            ->assertSessionHas('error');
+
+        $this->assertSame(5, $product->fresh()->stock);
+        $this->assertDatabaseCount('stock_movements', 2);
     }
 
     public function test_owner_can_update_product_stock_and_audits_the_adjustment(): void
