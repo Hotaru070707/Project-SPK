@@ -6,31 +6,98 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\TopsisCriterion;
 use App\Models\TopsisResult;
+use App\Services\TopsisCalculationService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class TopsisController extends Controller
 {
+    private const CRITERIA_CODES = ['C1', 'C2', 'C3'];
+
+    /**
+     * @var array<string, array{name: string, type: string, data_source: string}>
+     */
+    private const CRITERIA_CONFIGURATION = [
+        'C1' => [
+            'name' => 'Tingkat Penjualan',
+            'type' => 'benefit',
+            'data_source' => 'order_items.qty',
+        ],
+        'C2' => [
+            'name' => 'Stok Tersedia',
+            'type' => 'cost',
+            'data_source' => 'products.stock',
+        ],
+        'C3' => [
+            'name' => 'Waktu Pengadaan',
+            'type' => 'cost',
+            'data_source' => 'products.supplier_lead_time_days',
+        ],
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    private const ALTERNATIVES = [
+        'Beras' => 'beras',
+        'Minyak Goreng' => 'minyak goreng',
+        'Telur Ayam' => 'telur ayam',
+        'Kecap Manis' => 'kecap manis',
+    ];
+
     public function criteria(): View
     {
-        $criteria = TopsisCriterion::query()->orderBy('code')->get();
+        $criteria = TopsisCriterion::query()
+            ->where('is_active', true)
+            ->whereIn('code', self::CRITERIA_CODES)
+            ->orderBy('code')
+            ->get();
         $totalWeight = $criteria->sum('weight');
+        [$products, $missingAlternatives] = $this->resolveAlternatives();
+        $productsMissingLeadTime = $products
+            ->filter(fn (Product $product): bool => $product->supplier_lead_time_days === null);
+        $productsWithInvalidStock = $products
+            ->filter(fn (Product $product): bool => $product->stock < 0);
+        $criteriaValid = $this->hasValidCriteria($criteria)
+            && $criteria->sum(fn (TopsisCriterion $criterion): int => (int) round((float) $criterion->weight * 10000)) === 10000;
+        $dataComplete = $missingAlternatives === []
+            && $products->count() === count(self::ALTERNATIVES)
+            && $productsMissingLeadTime->isEmpty()
+            && $productsWithInvalidStock->isEmpty();
+        $latestResult = TopsisResult::query()->latest('created_at')->latest('id')->first();
 
-        return view('owner.topsis.criteria', compact('criteria', 'totalWeight'));
+        return view('owner.topsis.criteria', compact(
+            'criteria',
+            'totalWeight',
+            'criteriaValid',
+            'dataComplete',
+            'missingAlternatives',
+            'productsMissingLeadTime',
+            'productsWithInvalidStock',
+            'latestResult'
+        ));
     }
 
     public function updateCriteria(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'weights' => ['required', 'array'],
-            'weights.*' => ['required', 'numeric', 'min:0', 'max:1'],
-        ]);
+        $validated = $this->validatedWeights($request);
+        $criteria = TopsisCriterion::query()
+            ->where('is_active', true)
+            ->whereIn('code', self::CRITERIA_CODES)
+            ->orderBy('code')
+            ->get();
+        if (! $this->hasValidCriteria($criteria)) {
+            throw ValidationException::withMessages([
+                'weights' => ['Tiga kriteria TOPSIS yang diwajibkan belum tersedia atau tipenya tidak sesuai.'],
+            ]);
+        }
 
-        $criteria = TopsisCriterion::query()->get();
         $expectedIds = array_map('strval', $criteria->modelKeys());
         $submittedIds = array_map('strval', array_keys($validated['weights']));
         sort($expectedIds);
@@ -42,16 +109,13 @@ class TopsisController extends Controller
             ]);
         }
 
-        $totalWeight = array_sum(array_map('floatval', $validated['weights']));
-        if (abs($totalWeight - 1.0) > 0.0001) {
-            throw ValidationException::withMessages([
-                'weights' => ['Total bobot kriteria harus tepat 1,00 (100%).'],
-            ]);
-        }
-
         DB::transaction(function () use ($validated): void {
             foreach ($validated['weights'] as $id => $weight) {
-                TopsisCriterion::query()->whereKey($id)->update(['weight' => $weight]);
+                TopsisCriterion::query()
+                    ->whereKey($id)
+                    ->where('is_active', true)
+                    ->whereIn('code', self::CRITERIA_CODES)
+                    ->update(['weight' => $weight]);
             }
         });
 
@@ -62,54 +126,77 @@ class TopsisController extends Controller
 
     public function calculate(): View|RedirectResponse
     {
-        $criteria = TopsisCriterion::query()
-            ->where('is_active', true)
-            ->whereIn('code', ['C1', 'C2', 'C3', 'C4'])
-            ->orderBy('code')
-            ->get();
-        $criteriaCodes = $criteria->pluck('code')->all();
-        if ($criteriaCodes !== ['C1', 'C2', 'C3', 'C4']) {
+        $result = TopsisResult::query()->latest('created_at')->latest('id')->first();
+        if (! $result) {
             return redirect()
                 ->route('admin.topsis.criteria')
-                ->with('error', 'Empat kriteria TOPSIS belum tersedia atau belum aktif.');
+                ->with('info', 'Belum ada hasil perhitungan TOPSIS. Jalankan perhitungan untuk membuat hasil pertama.');
         }
 
-        $totalWeight = $criteria->sum('weight');
-        if (abs($totalWeight - 1.0) > 0.0001) {
+        return $this->calculationView($result);
+    }
+
+    public function runCalculation(TopsisCalculationService $calculationService): RedirectResponse
+    {
+        $criteria = TopsisCriterion::query()
+            ->where('is_active', true)
+            ->whereIn('code', self::CRITERIA_CODES)
+            ->orderBy('code')
+            ->get();
+        if (! $this->hasValidCriteria($criteria)) {
+            return redirect()
+                ->route('admin.topsis.criteria')
+                ->with('error', 'Konfigurasi kriteria TOPSIS tidak sesuai dengan sumber, nama, atau tipe yang diwajibkan.');
+        }
+
+        $weightUnits = $criteria->sum(fn (TopsisCriterion $criterion): int => (int) round((float) $criterion->weight * 10000));
+        if ($weightUnits !== 10000) {
             return redirect()
                 ->route('admin.topsis.criteria')
                 ->with('error', 'Total bobot kriteria harus tepat 100% sebelum perhitungan.');
         }
 
-        $products = Product::query()
-            ->where('is_active', true)
-            ->with('category')
-            ->orderBy('name')
-            ->get();
-
-        if ($products->count() < 2) {
+        [$products, $missingAlternatives] = $this->resolveAlternatives();
+        if ($missingAlternatives !== []) {
             return redirect()
-                ->route('admin.products')
-                ->with('error', 'Dibutuhkan minimal dua produk aktif untuk melakukan analisis TOPSIS.');
+                ->route('admin.topsis.criteria')
+                ->with('error', 'Produk alternatif belum tersedia atau tidak aktif: '.implode(', ', $missingAlternatives).'.');
+        }
+
+        if ($products->count() !== count(self::ALTERNATIVES)) {
+            return redirect()
+                ->route('admin.topsis.criteria')
+                ->with('error', 'Empat produk alternatif yang diwajibkan belum tersedia di database.');
         }
 
         $productsMissingLeadTime = $products
-            ->filter(fn (Product $product): bool => $product->supplier_lead_time_days === null)
-            ->pluck('name');
+            ->filter(fn (Product $product): bool => $product->supplier_lead_time_days === null);
         if ($productsMissingLeadTime->isNotEmpty()) {
             return redirect()
-                ->route('admin.products')
-                ->with('error', 'Lengkapi waktu pengadaan pemasok untuk produk berikut sebelum menghitung TOPSIS: '.$productsMissingLeadTime->implode(', '));
+                ->route('admin.topsis.criteria')
+                ->with('error', 'Lengkapi waktu pengadaan supplier untuk: '.$productsMissingLeadTime->pluck('name')->implode(', ').'.');
+        }
+
+        $productsWithInvalidValues = $products->filter(
+            fn (Product $product): bool => $product->stock < 0 || $product->supplier_lead_time_days < 0
+        );
+        if ($productsWithInvalidValues->isNotEmpty()) {
+            return redirect()
+                ->route('admin.topsis.criteria')
+                ->with('error', 'Perbaiki data stok atau waktu pengadaan yang bernilai negatif untuk: '.$productsWithInvalidValues->pluck('name')->implode(', ').'.');
         }
 
         $periodEnd = now();
-        $periodStart = $periodEnd->copy()->subDays(30)->startOfDay();
+        $periodStart = $periodEnd->copy()->subDays(30);
         $salesByProduct = OrderItem::query()
             ->select('product_id')
             ->selectRaw('SUM(qty) as units_sold')
-            ->whereIn('product_id', $products->modelKeys())
+            ->whereIn('product_id', $products->pluck('id'))
+            ->where('item_status', 'normal')
+            ->where('qty', '>', 0)
             ->whereHas('order', function ($query) use ($periodStart, $periodEnd): void {
                 $query->where('payment_status', 'paid')
+                    ->whereNotIn('order_status', ['cancelled', 'void'])
                     ->whereBetween('paid_at', [$periodStart, $periodEnd]);
             })
             ->groupBy('product_id')
@@ -117,128 +204,136 @@ class TopsisController extends Controller
 
         $matrixX = [];
         foreach ($products as $product) {
-            $unitsSold = (float) ($salesByProduct[$product->id] ?? 0);
-            $stockUrgency = $product->stock <= $product->min_stock
-                ? ($product->min_stock + 1 - $product->stock) / max(1, $product->min_stock + 1)
-                : 0.0;
-            $profitMargin = $product->sell_price > 0
-                ? (($product->sell_price - $product->cost_price) / $product->sell_price) * 100
-                : 0.0;
-
             $matrixX[$product->id] = [
-                'product' => $product,
-                'C1' => (float) $stockUrgency,
-                'C2' => $unitsSold,
+                'product' => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'slug' => $product->slug,
+                    'stock' => $product->stock,
+                    'min_stock' => $product->min_stock,
+                    'unit' => $product->unit,
+                    'supplier_lead_time_days' => $product->supplier_lead_time_days,
+                ],
+                'C1' => (float) ($salesByProduct[$product->id] ?? 0),
+                'C2' => (float) $product->stock,
                 'C3' => (float) $product->supplier_lead_time_days,
-                'C4' => (float) $profitMargin,
             ];
         }
 
-        $divisors = [];
-        foreach ($criteria as $criterion) {
-            $code = $criterion->code;
-            $sumOfSquares = 0.0;
-            foreach ($matrixX as $row) {
-                $sumOfSquares += $row[$code] ** 2;
-            }
-            $divisors[$code] = sqrt($sumOfSquares) ?: 1.0;
-        }
+        $criteriaSnapshot = $criteria->map(fn (TopsisCriterion $criterion): array => [
+            'code' => $criterion->code,
+            'name' => $criterion->name,
+            'description' => $criterion->description,
+            'type' => $criterion->type,
+            'weight' => (float) $criterion->weight,
+            'data_source' => $criterion->data_source,
+        ])->all();
+        $calculation = $calculationService->calculate($criteriaSnapshot, $matrixX);
+        $criteriaSnapshotPayload = [
+            'criteria' => $criteriaSnapshot,
+            'zero_divisor_codes' => $calculation['zero_divisor_codes'],
+            'alternatives_identical' => $calculation['alternatives_identical'],
+            'weight_total' => $weightUnits / 10000,
+        ];
 
-        $matrixR = [];
-        foreach ($matrixX as $productId => $row) {
-            $matrixR[$productId] = ['product' => $row['product']];
-            foreach ($criteria as $criterion) {
-                $code = $criterion->code;
-                $matrixR[$productId][$code] = $row[$code] / $divisors[$code];
-            }
-        }
-
-        $matrixY = [];
-        foreach ($matrixR as $productId => $row) {
-            $matrixY[$productId] = ['product' => $row['product']];
-            foreach ($criteria as $criterion) {
-                $code = $criterion->code;
-                $matrixY[$productId][$code] = $row[$code] * (float) $criterion->weight;
-            }
-        }
-
-        $idealPositive = [];
-        $idealNegative = [];
-        foreach ($criteria as $criterion) {
-            $code = $criterion->code;
-            $columnValues = array_column($matrixY, $code);
-            if ($criterion->type === 'benefit') {
-                $idealPositive[$code] = max($columnValues);
-                $idealNegative[$code] = min($columnValues);
-            } else {
-                $idealPositive[$code] = min($columnValues);
-                $idealNegative[$code] = max($columnValues);
-            }
-        }
-
-        $distances = [];
-        $preferences = [];
-        foreach ($matrixY as $productId => $row) {
-            $dPlusSquared = 0.0;
-            $dMinusSquared = 0.0;
-            foreach ($criteria as $criterion) {
-                $code = $criterion->code;
-                $dPlusSquared += ($row[$code] - $idealPositive[$code]) ** 2;
-                $dMinusSquared += ($row[$code] - $idealNegative[$code]) ** 2;
-            }
-
-            $dPlus = sqrt($dPlusSquared);
-            $dMinus = sqrt($dMinusSquared);
-            $preference = ($dPlus + $dMinus) > 0
-                ? $dMinus / ($dPlus + $dMinus)
-                : 0.5;
-            $product = $row['product'];
-            $unitsSold = (int) $matrixX[$productId]['C2'];
-            $isUrgent = $product->stock <= $product->min_stock;
-
-            $distances[$productId] = [
-                'product' => $product,
-                'd_plus' => round($dPlus, 4),
-                'd_minus' => round($dMinus, 4),
-            ];
-            $preferences[$productId] = [
-                'product' => $product,
-                'ci' => round($preference, 4),
-                'recommendation' => $isUrgent ? 'Restock Segera' : 'Pantau',
-                'reason' => sprintf(
-                    'Stok %d dari minimum %d; terjual %d unit/30 hari; pengadaan %d hari; margin %.1f%%.',
-                    $product->stock,
-                    $product->min_stock,
-                    $unitsSold,
-                    $product->supplier_lead_time_days,
-                    $product->margin
-                ),
-            ];
-        }
-
-        uasort($preferences, static function (array $left, array $right): int {
-            $scoreComparison = $right['ci'] <=> $left['ci'];
-
-            return $scoreComparison !== 0
-                ? $scoreComparison
-                : strcasecmp($left['product']->name, $right['product']->name);
+        DB::transaction(function () use (
+            $periodStart,
+            $periodEnd,
+            $criteriaSnapshotPayload,
+            $matrixX,
+            $calculation
+        ): void {
+            TopsisResult::query()->create([
+                'period_start' => $periodStart->toDateTimeString(),
+                'period_end' => $periodEnd->toDateTimeString(),
+                'generated_by' => Auth::id(),
+                'criteria_snapshot' => $criteriaSnapshotPayload,
+                'decision_matrix' => $matrixX,
+                'normalized_matrix' => $calculation['normalized_matrix'],
+                'weighted_matrix' => $calculation['weighted_matrix'],
+                'ideal_positive' => $calculation['ideal_positive'],
+                'ideal_negative' => $calculation['ideal_negative'],
+                'distances' => $calculation['distances'],
+                'preferences' => $calculation['preferences'],
+            ]);
         });
 
-        TopsisResult::query()->create([
-            'period_start' => $periodStart->toDateString(),
-            'period_end' => $periodEnd->toDateString(),
-            'generated_by' => Auth::id(),
-            'criteria_snapshot' => $criteria->toArray(),
-            'decision_matrix' => $matrixX,
-            'normalized_matrix' => $matrixR,
-            'weighted_matrix' => $matrixY,
-            'ideal_positive' => $idealPositive,
-            'ideal_negative' => $idealNegative,
-            'distances' => $distances,
-            'preferences' => $preferences,
-        ]);
+        return redirect()
+            ->route('admin.topsis.calculate')
+            ->with('success', 'Perhitungan TOPSIS berhasil disimpan ke riwayat.');
+    }
+
+    public function recommendations(): View|RedirectResponse
+    {
+        $latestResult = TopsisResult::query()->latest('created_at')->latest('id')->first();
+        if (! $latestResult) {
+            return redirect()->route('admin.topsis.criteria');
+        }
+
+        $criteriaSnapshot = $latestResult->criteria_snapshot;
+        $criteria = $this->criteriaFromSnapshot($criteriaSnapshot);
+        $decisionMatrix = $latestResult->decision_matrix;
+        $preferences = [];
+        $position = 1;
+
+        foreach ($latestResult->preferences as $productId => $item) {
+            $item['rank'] ??= $position;
+            $item['metrics'] = $decisionMatrix[$productId] ?? [];
+            $preferences[] = $item;
+            $position++;
+        }
+
+        $isLegacyResult = array_column($criteria, 'code') !== self::CRITERIA_CODES;
+
+        return view('owner.topsis.recommendations', compact(
+            'preferences',
+            'criteria',
+            'latestResult',
+            'isLegacyResult'
+        ));
+    }
+
+    public function history(): View
+    {
+        $results = TopsisResult::query()
+            ->with('generator:id,name')
+            ->latest('created_at')
+            ->latest('id')
+            ->paginate(15);
+
+        return view('owner.topsis.history', compact('results'));
+    }
+
+    public function showHistory(TopsisResult $result): View
+    {
+        return $this->calculationView($result->load('generator:id,name'));
+    }
+
+    private function calculationView(TopsisResult $result): View
+    {
+        $criteriaSnapshot = $result->criteria_snapshot;
+        $criteria = $this->criteriaFromSnapshot($criteriaSnapshot);
+        $zeroDivisorCodes = $criteriaSnapshot['zero_divisor_codes'] ?? [];
+        $alternativesIdentical = $criteriaSnapshot['alternatives_identical'] ?? false;
+        $matrixX = $result->decision_matrix;
+        $matrixR = $result->normalized_matrix;
+        $matrixY = $result->weighted_matrix;
+        $idealPositive = $result->ideal_positive;
+        $idealNegative = $result->ideal_negative;
+        $distances = $result->distances;
+        $preferences = $result->preferences;
+        $position = 1;
+        foreach ($preferences as &$preference) {
+            $productId = $preference['product']['id'] ?? null;
+            $preference['rank'] ??= $position;
+            $preference['d_plus'] ??= $distances[$productId]['d_plus'] ?? 0;
+            $preference['d_minus'] ??= $distances[$productId]['d_minus'] ?? 0;
+            $position++;
+        }
+        unset($preference);
 
         return view('owner.topsis.calculation', compact(
+            'result',
             'criteria',
             'matrixX',
             'matrixR',
@@ -246,31 +341,130 @@ class TopsisController extends Controller
             'idealPositive',
             'idealNegative',
             'distances',
-            'preferences'
+            'preferences',
+            'zeroDivisorCodes',
+            'alternativesIdentical'
         ));
     }
 
-    public function recommendations(): View|RedirectResponse
+    /**
+     * @return array{0: Collection<int, Product>, 1: array<int, string>}
+     */
+    private function resolveAlternatives(): array
     {
-        $latestResult = TopsisResult::query()->latest()->first();
-        if (! $latestResult) {
-            return redirect()->route('admin.topsis.calculate');
-        }
+        $activeProducts = Product::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+                'slug',
+                'stock',
+                'min_stock',
+                'unit',
+                'supplier_lead_time_days',
+            ]);
+        $products = collect();
+        $missingAlternatives = [];
 
-        $preferences = collect($latestResult->preferences)->map(function ($item) {
-            if (! isset($item['reason'])) {
-                $stock = $item['product']['stock'] ?? 0;
-                $minStock = $item['product']['min_stock'] ?? 0;
-                $isUrgent = $stock <= $minStock;
-                $item['reason'] = $isUrgent
-                    ? 'Stok berada pada atau di bawah batas minimum.'
-                    : 'Evaluasi berdasarkan skor preferensi TOPSIS ('.number_format($item['ci'] ?? 0, 4).').';
+        foreach (self::ALTERNATIVES as $label => $searchTerm) {
+            $searchTerm = Str::lower($searchTerm);
+            $product = $activeProducts->first(
+                fn (Product $candidate): bool => Str::contains(Str::lower($candidate->name), $searchTerm)
+            );
+
+            if ($product === null) {
+                $missingAlternatives[] = $label;
+
+                continue;
             }
 
-            return $item;
-        })->all();
-        $criteria = $latestResult->criteria_snapshot;
+            $products->push($product);
+        }
 
-        return view('owner.topsis.recommendations', compact('preferences', 'criteria', 'latestResult'));
+        return [$products, $missingAlternatives];
+    }
+
+    /**
+     * @param  Collection<int, TopsisCriterion>  $criteria
+     */
+    private function hasValidCriteria(Collection $criteria): bool
+    {
+        if ($criteria->pluck('code')->all() !== self::CRITERIA_CODES) {
+            return false;
+        }
+
+        foreach ($criteria as $criterion) {
+            $expected = self::CRITERIA_CONFIGURATION[$criterion->code] ?? null;
+            if (
+                $expected === null
+                || $criterion->name !== $expected['name']
+                || $criterion->type !== $expected['type']
+                || $criterion->data_source !== $expected['data_source']
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{weights: array<int, string|int|float>}
+     */
+    private function validatedWeights(Request $request): array
+    {
+        $validated = $request->validate([
+            'weights' => ['required', 'array'],
+            'weights.*' => ['required', 'numeric', 'decimal:0,4', 'min:0', 'max:1'],
+        ]);
+
+        $criteria = TopsisCriterion::query()
+            ->where('is_active', true)
+            ->whereIn('code', self::CRITERIA_CODES)
+            ->orderBy('code')
+            ->get();
+
+        if (! $this->hasValidCriteria($criteria)) {
+            throw ValidationException::withMessages([
+                'weights' => ['Konfigurasi tiga kriteria TOPSIS belum sesuai. Jalankan migration terbaru sebelum menyimpan bobot.'],
+            ]);
+        }
+
+        $expectedIds = array_map('strval', $criteria->modelKeys());
+        $submittedIds = array_map('strval', array_keys($validated['weights']));
+        sort($expectedIds);
+        sort($submittedIds);
+
+        if ($expectedIds !== $submittedIds) {
+            throw ValidationException::withMessages([
+                'weights' => ['Semua bobot kriteria harus dikirim dan tidak boleh ada kriteria asing.'],
+            ]);
+        }
+
+        $totalWeightUnits = array_sum(array_map(
+            static fn (int|float|string $weight): int => (int) round((float) $weight * 10000),
+            $validated['weights']
+        ));
+        if ($totalWeightUnits !== 10000) {
+            throw ValidationException::withMessages([
+                'weights' => ['Total bobot kriteria harus tepat 1,00 (100%).'],
+            ]);
+        }
+
+        return $validated;
+    }
+
+    /**
+     * @param  array<string|int, mixed>  $snapshot
+     * @return array<int, array<string, mixed>>
+     */
+    private function criteriaFromSnapshot(array $snapshot): array
+    {
+        if (isset($snapshot['criteria']) && is_array($snapshot['criteria'])) {
+            return $snapshot['criteria'];
+        }
+
+        return array_values($snapshot);
     }
 }

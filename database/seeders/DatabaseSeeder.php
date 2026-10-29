@@ -253,7 +253,6 @@ class DatabaseSeeder extends Seeder
 
         $products = [];
         foreach ($productsData as $prod) {
-            $prod['supplier_lead_time_days'] ??= 3;
             $products[] = Product::updateOrCreate(['slug' => $prod['slug']], $prod);
         }
 
@@ -261,39 +260,33 @@ class DatabaseSeeder extends Seeder
         $criteria = [
             [
                 'code' => 'C1',
-                'name' => 'Urgensi Stok',
-                'description' => 'Urgensi dihitung dari stok tersedia dibandingkan stok minimum.',
+                'name' => 'Tingkat Penjualan',
+                'description' => 'Jumlah unit yang terjual selama 30 hari terakhir.',
                 'type' => 'benefit',
                 'weight' => 0.4000,
-                'data_source' => 'stock_urgency',
+                'data_source' => 'order_items.qty',
             ],
             [
                 'code' => 'C2',
-                'name' => 'Kecepatan Penjualan',
-                'description' => 'Jumlah unit terjual selama 30 hari terakhir.',
-                'type' => 'benefit',
-                'weight' => 0.3000,
-                'data_source' => 'units_sold_30_days',
+                'name' => 'Stok Tersedia',
+                'description' => 'Jumlah stok aktual yang tersedia saat perhitungan.',
+                'type' => 'cost',
+                'weight' => 0.3500,
+                'data_source' => 'products.stock',
             ],
             [
                 'code' => 'C3',
-                'name' => 'Lama Pengadaan',
-                'description' => 'Waktu tunggu pengadaan dari pemasok dalam hari.',
-                'type' => 'benefit',
-                'weight' => 0.2000,
-                'data_source' => 'supplier_lead_time_days',
-            ],
-            [
-                'code' => 'C4',
-                'name' => 'Margin Keuntungan',
-                'description' => 'Persentase margin kotor dari harga jual dan harga modal.',
-                'type' => 'benefit',
-                'weight' => 0.1000,
-                'data_source' => 'profit_margin_percent',
+                'name' => 'Waktu Pengadaan',
+                'description' => 'Waktu tunggu pemasok untuk menyediakan produk dalam hari.',
+                'type' => 'cost',
+                'weight' => 0.2500,
+                'data_source' => 'products.supplier_lead_time_days',
             ],
         ];
 
-        TopsisCriterion::whereNotIn('code', ['C1', 'C2', 'C3', 'C4'])->delete();
+        TopsisCriterion::query()
+            ->whereNotIn('code', ['C1', 'C2', 'C3'])
+            ->update(['is_active' => false]);
 
         foreach ($criteria as $crit) {
             TopsisCriterion::updateOrCreate(['code' => $crit['code']], $crit);

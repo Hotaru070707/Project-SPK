@@ -11,11 +11,12 @@
                 Pantau omzet penjualan offline & online secara terintegrasi serta lihat saran restock otomatis berbasis metode TOPSIS.
             </p>
         </div>
-        <div class="flex items-center gap-2">
-            <a href="{{ route('admin.topsis.calculate') }}" class="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-extrabold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5">
+        <form action="{{ route('admin.topsis.calculate.run') }}" method="POST" class="flex items-center gap-2">
+            @csrf
+            <button type="submit" class="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-extrabold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5">
                 <i data-lucide="calculator" class="w-4 h-4"></i> Hitung Ulang TOPSIS
-            </a>
-        </div>
+            </button>
+        </form>
     </div>
 
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -119,13 +120,13 @@
 
         @if($latestTopsis && !empty($latestTopsis->preferences))
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                @foreach(array_slice($latestTopsis->preferences, 0, 3) as $pref)
+                @foreach(array_slice($latestTopsis->preferences, 0, 3) as $position => $pref)
                     <div class="p-3.5 rounded-xl border border-neutral-200 bg-neutral-50/70 flex flex-col justify-between">
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-[10px] font-bold font-mono text-slate-500">Ci: {{ $pref['ci'] }}</span>
-                                <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold {{ $pref['recommendation'] === 'Restock Segera' ? 'bg-orange-100 text-orange-800' : 'bg-emerald-100 text-emerald-800' }}">
-                                    {{ $pref['recommendation'] }}
+                                <span class="text-[10px] font-bold font-mono text-slate-500">Preferensi: {{ number_format((float) $pref['ci'], 6, ',', '.') }}</span>
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold {{ $position === 0 ? 'bg-blue-100 text-blue-800' : 'bg-neutral-100 text-neutral-700' }}">
+                                    Prioritas #{{ $position + 1 }}
                                 </span>
                             </div>
                             <h4 class="text-xs font-bold text-neutral-900 line-clamp-1">{{ $pref['product']['name'] }}</h4>
@@ -136,7 +137,7 @@
             </div>
         @else
             <div class="p-6 text-center text-xs text-neutral-500 bg-neutral-50 rounded-xl">
-                Belum ada kalkulasi TOPSIS tersimpan. Klik tombol <a href="{{ route('admin.topsis.calculate') }}" class="font-bold text-emerald-600 underline">Hitung Ulang TOPSIS</a> untuk menjalankan engine.
+                Belum ada kalkulasi TOPSIS tersimpan. <a href="{{ route('admin.topsis.criteria') }}" class="font-bold text-blue-700 underline">Lengkapi bobot dan data kriteria</a> sebelum menjalankan perhitungan.
             </div>
         @endif
     </div>

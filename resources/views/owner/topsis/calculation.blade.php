@@ -1,227 +1,215 @@
-@extends('layouts.owner', ['title' => 'Perhitungan TOPSIS - Mobeli', 'header' => 'Langkah Perhitungan Lengkap Algoritma TOPSIS'])
+@extends('layouts.owner', ['title' => 'Matriks TOPSIS - Mobeli', 'header' => 'Matriks & Perhitungan TOPSIS'])
 
 @section('content')
-<div class="space-y-8 pb-12">
-    <!-- Action Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-        <div>
-            <span class="text-xs font-bold uppercase tracking-wider text-emerald-700">Audit Trail SPK</span>
-            <h2 class="text-lg font-bold font-heading text-neutral-900">Perhitungan Matriks TOPSIS 6 Langkah</h2>
-            <p class="text-xs text-neutral-500">Transparansi matematis dari data mentah toko hingga menghasilkan nilai preferensi.</p>
+<div class="space-y-6 pb-10">
+    <section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-xs sm:p-6">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <span class="text-xs font-bold uppercase tracking-wider text-blue-700">Audit perhitungan SPK</span>
+                <h1 class="mt-1 font-heading text-xl font-extrabold text-neutral-900">Tahapan Perhitungan TOPSIS</h1>
+                <p class="mt-2 text-sm text-neutral-600">
+                    Snapshot hasil {{ $result->created_at->format('d/m/Y H:i') }}
+                    @if ($result->generator)
+                        oleh {{ $result->generator->name }}
+                    @endif
+                    · Periode penjualan                     {{ \Illuminate\Support\Carbon::parse($result->period_start)->format('d/m/Y H:i') }}–{{ \Illuminate\Support\Carbon::parse($result->period_end)->format('d/m/Y H:i') }}.
+                </p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="window.print()" class="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2.5 text-xs font-bold text-neutral-700 hover:bg-neutral-50">
+                    <i data-lucide="printer" class="h-4 w-4"></i> Cetak
+                </button>
+                <a href="{{ route('admin.topsis.recommendations') }}" class="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-800">
+                    <i data-lucide="award" class="h-4 w-4"></i> Rekomendasi
+                </a>
+                <a href="{{ route('admin.topsis.history') }}" class="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2.5 text-xs font-bold text-neutral-700 hover:bg-neutral-50">
+                    <i data-lucide="history" class="h-4 w-4"></i> Riwayat
+                </a>
+            </div>
         </div>
-        <div class="flex items-center gap-2">
-            <button type="button" onclick="window.print()" class="px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
-                <i data-lucide="printer" class="w-3.5 h-3.5"></i> Cetak Dokumen
-            </button>
-            <a href="{{ route('admin.topsis.recommendations') }}" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5">
-                <i data-lucide="award" class="w-3.5 h-3.5"></i> Lihat Hasil Akhir Rekomendasi
-            </a>
-        </div>
-    </div>
-
-    <div class="bg-white rounded-2xl border border-neutral-200 p-5 shadow-xs">
-        <h3 class="text-sm font-bold font-heading text-neutral-900 mb-3">Kriteria dan Bobot Perhitungan</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            @foreach($criteria as $criterion)
-                <div class="rounded-xl border border-neutral-100 bg-neutral-50 p-3">
+        <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            @foreach ($criteria as $criterion)
+                <div class="rounded-xl border border-neutral-200 bg-neutral-50 p-3.5">
                     <div class="flex items-center justify-between gap-2">
-                        <span class="font-mono text-xs font-bold text-primary">{{ $criterion->code }}</span>
-                        <span class="font-mono text-xs font-bold text-neutral-700">{{ number_format((float) $criterion->weight * 100, 0) }}%</span>
+                        <span class="font-mono text-xs font-bold text-blue-700">{{ $criterion['code'] }}</span>
+                        <span class="rounded-full px-2 py-1 text-[10px] font-bold uppercase {{ ($criterion['type'] ?? '') === 'benefit' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
+                            {{ ($criterion['type'] ?? '') === 'benefit' ? 'Benefit' : 'Cost' }}
+                        </span>
                     </div>
-                    <p class="mt-1 text-xs font-bold text-neutral-900">{{ $criterion->name }}</p>
-                    <p class="mt-1 text-[11px] text-neutral-500">{{ $criterion->description }}</p>
+                    <p class="mt-2 text-xs font-bold text-neutral-900">{{ $criterion['name'] }}</p>
+                    <p class="mt-1 text-[11px] text-neutral-500">Bobot {{ number_format((float) $criterion['weight'] * 100, 2, ',', '.') }}%</p>
                 </div>
             @endforeach
         </div>
-        <p class="mt-3 text-[11px] text-neutral-500">Kecepatan penjualan menggunakan transaksi lunas 30 hari terakhir. Perhitungan dihentikan bila waktu pengadaan belum diisi pada salah satu produk aktif.</p>
-    </div>
+        <p class="mt-3 text-xs text-neutral-500">Data penjualan dihitung dari transaksi berstatus lunas dan item normal selama periode di atas.</p>
+    </section>
 
-    <!-- LANGKAH 1: Matriks Keputusan (X) -->
-    <div class="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-3">
-        <div class="flex items-center justify-between pb-2 border-b border-neutral-100">
-            <h3 class="text-sm font-bold font-heading text-neutral-900 flex items-center gap-2">
-                <span class="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">1</span>
-                Matriks Keputusan (X)
-            </h3>
-            <span class="text-[11px] text-neutral-400 font-mono">Nilai Asli Metrik Toko</span>
+    @if ($zeroDivisorCodes !== [])
+        <div role="status" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Penyebut normalisasi bernilai nol untuk {{ implode(', ', $zeroDivisorCodes) }}. Nilai normalisasinya ditetapkan 0 agar tidak menghasilkan NaN atau Infinity.
         </div>
+    @endif
+    @if ($alternativesIdentical)
+        <div role="status" class="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            Semua alternatif memiliki nilai kriteria identik. TOPSIS tidak dapat membedakan prioritas berdasarkan data ini; nilai preferensi yang sama ditampilkan sebagai 0,500000.
+        </div>
+    @endif
 
+    <section class="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xs">
+        <div class="border-b border-neutral-100 p-5">
+            <h2 class="font-heading text-sm font-bold text-neutral-900">1. Matriks keputusan awal (X)</h2>
+            <p class="mt-1 text-xs text-neutral-500">Nilai aktual yang menjadi dasar analisis: unit terjual, stok tersedia, dan waktu pengadaan dalam hari.</p>
+        </div>
         <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left">
-                <thead class="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase font-semibold">
+            <table class="w-full min-w-[640px] text-left text-xs">
+                <thead class="bg-neutral-50 text-neutral-600">
                     <tr>
-                        <th class="p-2.5">Produk (Alternatif)</th>
-                        @foreach($criteria as $c)
-                            <th class="p-2.5 text-center font-mono">{{ $c->code }} ({{ $c->type }})</th>
+                        <th class="p-3">Alternatif produk</th>
+                        @foreach ($criteria as $criterion)
+                            <th class="p-3 text-right">{{ $criterion['code'] }} · {{ $criterion['name'] }}</th>
                         @endforeach
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-neutral-100">
-                    @foreach($matrixX as $row)
-                        <tr class="hover:bg-neutral-50">
-                            <td class="p-2.5 font-bold text-neutral-900 truncate max-w-xs">{{ $row['product']->name }}</td>
-                            @foreach($criteria as $c)
-                                <td class="p-2.5 text-center font-mono">{{ number_format((float) $row[$c->code], 4) }}</td>
+                    @foreach ($matrixX as $row)
+                        <tr>
+                            <td class="p-3 font-bold text-neutral-900">{{ $row['product']['name'] }}</td>
+                            @foreach ($criteria as $criterion)
+                                <td class="p-3 text-right font-mono">{{ number_format((float) $row[$criterion['code']], 4, ',', '.') }}</td>
                             @endforeach
                         </tr>
                     @endforeach
                 </tbody>
             </table>
         </div>
-    </div>
+    </section>
 
-    <!-- LANGKAH 2: Matriks Normalisasi (R) -->
-    <div class="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-3">
-        <div class="flex items-center justify-between pb-2 border-b border-neutral-100">
-            <h3 class="text-sm font-bold font-heading text-neutral-900 flex items-center gap-2">
-                <span class="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">2</span>
-                Matriks Ternormalisasi (R)
-            </h3>
-            <span class="text-[11px] text-neutral-400 font-mono">r_ij = x_ij / √(Σ x_kj²)</span>
+    <section class="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xs">
+        <div class="border-b border-neutral-100 p-5">
+            <h2 class="font-heading text-sm font-bold text-neutral-900">2. Matriks normalisasi (R)</h2>
+            <p class="mt-1 text-xs text-neutral-500">Setiap nilai dibagi akar jumlah kuadrat seluruh alternatif pada kolom kriteria yang sama.</p>
+            <p class="mt-2 font-mono text-[11px] text-blue-800">rᵢⱼ = xᵢⱼ / √(Σ xₖⱼ²)</p>
         </div>
-
         <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left">
-                <thead class="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase font-semibold">
+            <table class="w-full min-w-[640px] text-left text-xs">
+                <thead class="bg-neutral-50 text-neutral-600">
                     <tr>
-                        <th class="p-2.5">Produk (Alternatif)</th>
-                        @foreach($criteria as $c)
-                            <th class="p-2.5 text-center font-mono">{{ $c->code }}</th>
+                        <th class="p-3">Alternatif produk</th>
+                        @foreach ($criteria as $criterion)
+                            <th class="p-3 text-right">{{ $criterion['code'] }}</th>
                         @endforeach
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-neutral-100">
-                    @foreach($matrixR as $row)
-                        <tr class="hover:bg-neutral-50">
-                            <td class="p-2.5 font-bold text-neutral-900 truncate max-w-xs">{{ $row['product']->name }}</td>
-                            @foreach($criteria as $c)
-                                <td class="p-2.5 text-center font-mono text-emerald-800 font-semibold">{{ number_format((float) $row[$c->code], 4) }}</td>
+                    @foreach ($matrixR as $row)
+                        <tr>
+                            <td class="p-3 font-bold text-neutral-900">{{ $row['product']['name'] }}</td>
+                            @foreach ($criteria as $criterion)
+                                <td class="p-3 text-right font-mono">{{ number_format((float) $row[$criterion['code']], 6, ',', '.') }}</td>
                             @endforeach
                         </tr>
                     @endforeach
                 </tbody>
             </table>
         </div>
-    </div>
+    </section>
 
-    <!-- LANGKAH 3: Matriks Terbobot (Y) -->
-    <div class="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-3">
-        <div class="flex items-center justify-between pb-2 border-b border-neutral-100">
-            <h3 class="text-sm font-bold font-heading text-neutral-900 flex items-center gap-2">
-                <span class="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">3</span>
-                Matriks Ternormalisasi Terbobot (Y)
-            </h3>
-            <span class="text-[11px] text-neutral-400 font-mono">y_ij = w_j × r_ij</span>
+    <section class="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xs">
+        <div class="border-b border-neutral-100 p-5">
+            <h2 class="font-heading text-sm font-bold text-neutral-900">3. Matriks normalisasi terbobot (Y)</h2>
+            <p class="mt-1 text-xs text-neutral-500">Nilai normalisasi dikalikan bobot masing-masing kriteria tanpa pembulatan antara.</p>
+            <p class="mt-2 font-mono text-[11px] text-blue-800">yᵢⱼ = wⱼ × rᵢⱼ</p>
         </div>
-
         <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left">
-                <thead class="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase font-semibold">
+            <table class="w-full min-w-[640px] text-left text-xs">
+                <thead class="bg-neutral-50 text-neutral-600">
                     <tr>
-                        <th class="p-2.5">Produk (Alternatif)</th>
-                        @foreach($criteria as $c)
-                            <th class="p-2.5 text-center font-mono">{{ $c->code }} (w={{ $c->weight }})</th>
+                        <th class="p-3">Alternatif produk</th>
+                        @foreach ($criteria as $criterion)
+                            <th class="p-3 text-right">{{ $criterion['code'] }} · {{ number_format((float) $criterion['weight'], 4, ',', '.') }}</th>
                         @endforeach
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-neutral-100">
-                    @foreach($matrixY as $row)
-                        <tr class="hover:bg-neutral-50">
-                            <td class="p-2.5 font-bold text-neutral-900 truncate max-w-xs">{{ $row['product']->name }}</td>
-                            @foreach($criteria as $c)
-                                <td class="p-2.5 text-center font-mono text-slate-800">{{ number_format((float) $row[$c->code], 4) }}</td>
+                    @foreach ($matrixY as $row)
+                        <tr>
+                            <td class="p-3 font-bold text-neutral-900">{{ $row['product']['name'] }}</td>
+                            @foreach ($criteria as $criterion)
+                                <td class="p-3 text-right font-mono">{{ number_format((float) $row[$criterion['code']], 6, ',', '.') }}</td>
                             @endforeach
                         </tr>
                     @endforeach
                 </tbody>
             </table>
         </div>
-    </div>
+    </section>
 
-    <!-- LANGKAH 4: Solusi Ideal Positif (A+) & Negatif (A-) -->
-    <div class="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-3">
-        <div class="pb-2 border-b border-neutral-100">
-            <h3 class="text-sm font-bold font-heading text-neutral-900 flex items-center gap-2">
-                <span class="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">4</span>
-                Solusi Ideal Positif ($A^+$) dan Solusi Ideal Negatif ($A^-$)
-            </h3>
+    <section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-xs">
+        <div>
+            <h2 class="font-heading text-sm font-bold text-neutral-900">4. Solusi ideal positif (A⁺) dan negatif (A⁻)</h2>
+            <p class="mt-1 text-xs text-neutral-500">Benefit menggunakan maksimum sebagai A⁺, sementara cost menggunakan minimum. A⁻ memakai nilai sebaliknya.</p>
         </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs">
-                <span class="font-extrabold text-emerald-900 block mb-2">Solusi Ideal Positif ($A^+$):</span>
-                <div class="grid grid-cols-3 gap-2 font-mono">
-                    @foreach($idealPositive as $code => $val)
-                        <div class="p-2 bg-white rounded border border-emerald-200">
-                            <span class="text-neutral-400 block text-[10px]">{{ $code }}</span>
-                            <span class="font-bold text-emerald-800">{{ number_format((float) $val, 4) }}</span>
-                        </div>
-                    @endforeach
+        <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            @foreach ([['label' => 'Solusi ideal positif (A⁺)', 'values' => $idealPositive, 'tone' => 'positive'], ['label' => 'Solusi ideal negatif (A⁻)', 'values' => $idealNegative, 'tone' => 'negative']] as $ideal)
+                <div class="rounded-xl border p-4 {{ $ideal['tone'] === 'positive' ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/60' }}">
+                    <h3 class="text-xs font-bold text-neutral-900">{{ $ideal['label'] }}</h3>
+                    <div class="mt-3 grid grid-cols-3 gap-2">
+                        @foreach ($ideal['values'] as $code => $value)
+                            <div class="rounded-lg border border-white bg-white p-2.5">
+                                <span class="block font-mono text-[10px] text-neutral-500">{{ $code }}</span>
+                                <span class="mt-1 block font-mono text-xs font-bold text-neutral-900">{{ number_format((float) $value, 6, ',', '.') }}</span>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
-            </div>
-
-            <div class="p-4 rounded-xl bg-orange-50/70 border border-orange-200 text-xs">
-                <span class="font-extrabold text-orange-900 block mb-2">Solusi Ideal Negatif ($A^-$):</span>
-                <div class="grid grid-cols-3 gap-2 font-mono">
-                    @foreach($idealNegative as $code => $val)
-                        <div class="p-2 bg-white rounded border border-orange-200">
-                            <span class="text-neutral-400 block text-[10px]">{{ $code }}</span>
-                            <span class="font-bold text-orange-800">{{ number_format((float) $val, 4) }}</span>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
+            @endforeach
         </div>
-    </div>
+    </section>
 
-    <!-- LANGKAH 5 & 6: Jarak (D+, D-) dan Nilai Preferensi (Ci) -->
-    <div class="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-4">
-        <div class="flex items-center justify-between pb-2 border-b border-neutral-100">
-            <h3 class="text-sm font-bold font-heading text-neutral-900 flex items-center gap-2">
-                <span class="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-mono font-bold">5 & 6</span>
-                Jarak Euclidean ($D^+, D^-$), Nilai Preferensi ($C_i$), dan Ranking
-            </h3>
-            <span class="text-[11px] text-neutral-400 font-mono">C_i = D^- / (D^+ + D^-)</span>
+    <section class="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xs">
+        <div class="border-b border-neutral-100 p-5">
+            <h2 class="font-heading text-sm font-bold text-neutral-900">5–6. Jarak, nilai preferensi, dan ranking akhir</h2>
+            <p class="mt-1 text-xs text-neutral-500">Jarak Euclidean dihitung terhadap seluruh kriteria. Nilai preferensi lebih tinggi berarti prioritas relatif lebih tinggi.</p>
+            <p class="mt-2 font-mono text-[11px] text-blue-800">Vᵢ = Dᵢ⁻ / (Dᵢ⁺ + Dᵢ⁻)</p>
         </div>
-
         <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left">
-                <thead class="bg-neutral-50 border-b border-neutral-200 text-neutral-600 uppercase font-semibold">
+            <table class="w-full min-w-[760px] text-left text-xs">
+                <thead class="bg-neutral-50 text-neutral-600">
                     <tr>
-                        <th class="p-3 text-center w-12">Rank</th>
-                        <th class="p-3">Nama Produk</th>
-                        <th class="p-3 text-center font-mono">Jarak D+</th>
-                        <th class="p-3 text-center font-mono">Jarak D-</th>
-                        <th class="p-3 text-center font-mono">Preferensi (Ci)</th>
-                        <th class="p-3 text-center">Rekomendasi Actionable</th>
+                        <th class="p-3">Ranking</th>
+                        <th class="p-3">Produk</th>
+                        <th class="p-3 text-right">D⁺</th>
+                        <th class="p-3 text-right">D⁻</th>
+                        <th class="p-3 text-right">Preferensi (Vᵢ)</th>
+                        <th class="p-3">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-neutral-100">
-                    @php $rank = 1; @endphp
-                    @foreach($preferences as $pid => $item)
-                        <tr class="hover:bg-neutral-50 {{ $rank <= 3 ? 'bg-emerald-50/30' : '' }}">
-                            <td class="p-3 text-center font-black">
-                                <span class="w-6 h-6 rounded-full inline-flex items-center justify-center {{ $rank === 1 ? 'bg-amber-400 text-slate-900 font-black' : ($rank <= 3 ? 'bg-emerald-600 text-white' : 'bg-neutral-200 text-neutral-700') }}">
-                                    {{ $rank }}
+                    @foreach ($preferences as $item)
+                        @php($rank = (int) ($item['rank'] ?? 0))
+                        <tr class="{{ ($item['rank'] ?? 0) === 1 ? 'bg-blue-50/60' : '' }}">
+                            <td class="p-3">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full font-bold {{ $rank === 1 ? 'bg-blue-700 text-white' : 'bg-neutral-100 text-neutral-700' }}">
+                                    {{ $rank ?: '—' }}
                                 </span>
                             </td>
-                            <td class="p-3 font-bold text-neutral-900">{{ $item['product']->name }}</td>
-                            <td class="p-3 text-center font-mono">{{ number_format($distances[$pid]['d_plus'], 4) }}</td>
-                            <td class="p-3 text-center font-mono">{{ number_format($distances[$pid]['d_minus'], 4) }}</td>
-                            <td class="p-3 text-center font-mono font-extrabold text-emerald-800 text-sm">
-                                {{ number_format($item['ci'], 4) }}
-                            </td>
-                            <td class="p-3 text-center">
-                                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold {{ $item['recommendation'] === 'Restock Segera' ? 'bg-orange-100 text-orange-800' : ($item['recommendation'] === 'Produk Unggulan' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800') }}">
-                                    {{ $item['recommendation'] }}
+                            <td class="p-3 font-bold text-neutral-900">{{ $item['product']['name'] }}</td>
+                            <td class="p-3 text-right font-mono">{{ number_format((float) ($item['d_plus'] ?? 0), 6, ',', '.') }}</td>
+                            <td class="p-3 text-right font-mono">{{ number_format((float) ($item['d_minus'] ?? 0), 6, ',', '.') }}</td>
+                            <td class="p-3 text-right font-mono font-bold text-blue-800">{{ number_format((float) $item['ci'], 6, ',', '.') }}</td>
+                            <td class="p-3">
+                                <span class="rounded-full px-2.5 py-1 text-[10px] font-bold {{ $rank === 1 ? 'bg-blue-100 text-blue-800' : 'bg-neutral-100 text-neutral-700' }}">
+                                    {{ $item['recommendation'] ?? ($rank === 1 ? 'Prioritas tertinggi' : 'Prioritas relatif') }}
                                 </span>
                             </td>
                         </tr>
-                        @php $rank++; @endphp
                     @endforeach
                 </tbody>
             </table>
         </div>
-    </div>
+        <p class="border-t border-neutral-100 px-5 py-4 text-xs leading-5 text-neutral-500">
+            Ranking menunjukkan urutan prioritas relatif di antara alternatif yang dinilai. Ranking tidak memastikan stok akan habis dan tidak menentukan jumlah unit yang harus dibeli.
+        </p>
+    </section>
 </div>
 @endsection

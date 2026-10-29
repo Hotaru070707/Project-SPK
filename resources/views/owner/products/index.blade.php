@@ -2,6 +2,24 @@
 
 @section('content')
 <div class="space-y-6">
+    @if (session('success'))
+        <div role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ session('success') }}</div>
+    @endif
+    @if ($errors->any())
+        <div role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <p class="font-bold">Perubahan produk belum disimpan.</p>
+            <ul class="mt-1 list-inside list-disc">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+    @php
+        $oldEditProduct = old('edit_product_id')
+            ? $products->getCollection()->firstWhere('id', (int) old('edit_product_id'))
+            : null;
+    @endphp
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
         <div>
             <h3 class="text-base font-bold font-heading text-neutral-900">Daftar Produk Sembako</h3>
@@ -77,7 +95,11 @@
                                 </span>
                             </td>
                             <td class="p-3 text-center font-mono text-neutral-600">
-                                {{ $p->supplier_lead_time_days }} hari
+                                @if ($p->supplier_lead_time_days === null)
+                                    <span class="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800">Belum diisi</span>
+                                @else
+                                    {{ number_format((int) $p->supplier_lead_time_days, 0, ',', '.') }} hari
+                                @endif
                             </td>
                             <td class="p-3 text-center font-mono text-[11px] text-neutral-600">
                                 {{ $p->barcode ?? '-' }}
@@ -203,8 +225,8 @@
                            class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
                 </div>
                 <div>
-                    <label class="block font-bold text-neutral-700 mb-1">Lead Time (hari) <span class="text-red-500">*</span></label>
-                    <input type="number" name="supplier_lead_time_days" value="3" required min="0" max="365"
+                    <label class="block font-bold text-neutral-700 mb-1">Waktu Pengadaan Supplier (hari) <span class="text-red-500">*</span></label>
+                    <input type="number" name="supplier_lead_time_days" value="{{ old('supplier_lead_time_days') }}" required min="0" max="365"
                            class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
                 </div>
                 <div>
@@ -246,6 +268,7 @@
         <form id="formEditProduct" action="" method="POST" enctype="multipart/form-data" class="space-y-3.5 text-xs">
             @csrf
             @method('PUT')
+            <input type="hidden" name="edit_product_id" id="edit_product_id" value="">
 
             <!-- Upload / Ganti Foto Produk -->
             <div>
@@ -320,7 +343,7 @@
                            class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
                 </div>
                 <div>
-                    <label class="block font-bold text-neutral-700 mb-1">Lead Time (hari) <span class="text-red-500">*</span></label>
+                    <label class="block font-bold text-neutral-700 mb-1">Waktu Pengadaan Supplier (hari) <span class="text-red-500">*</span></label>
                     <input type="number" name="supplier_lead_time_days" id="edit_supplier_lead_time_days" required min="0" max="365"
                            class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-500">
                 </div>
@@ -340,7 +363,11 @@
             <div>
                 <label for="edit_stock_change_reason" class="block font-bold text-neutral-700 mb-1">Alasan perubahan stok <span class="text-neutral-400 font-normal">(wajib jika stok berubah)</span></label>
                 <input type="text" name="stock_change_reason" id="edit_stock_change_reason" maxlength="255"
+                       aria-describedby="edit_stock_change_reason_error"
                        class="w-full bg-neutral-50 border border-neutral-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-emerald-500">
+                <p id="edit_stock_change_reason_error" class="mt-1 text-[11px] font-semibold text-red-700 {{ $errors->has('stock_change_reason') ? '' : 'hidden' }}">
+                    {{ $errors->first('stock_change_reason') }}
+                </p>
             </div>
 
             <div class="pt-3 border-t border-neutral-100 flex items-center justify-end gap-2">
@@ -387,17 +414,21 @@
         const form = document.getElementById('formEditProduct');
         form.action = `/admin/produk/${product.id}`;
 
+        document.getElementById('edit_product_id').value = product.id;
         document.getElementById('edit_name').value = product.name || '';
         document.getElementById('edit_category_id').value = product.category_id || '';
         document.getElementById('edit_barcode').value = product.barcode || '';
         document.getElementById('edit_cost_price').value = Math.round(product.cost_price) || 0;
         document.getElementById('edit_sell_price').value = Math.round(product.sell_price) || 0;
-        document.getElementById('edit_stock').value = product.stock || 0;
+        const stockField = document.getElementById('edit_stock');
+        stockField.value = product.stock || 0;
+        stockField.dataset.originalStock = product.stock || 0;
         document.getElementById('edit_min_stock').value = product.min_stock || 0;
         document.getElementById('edit_supplier_lead_time_days').value = product.supplier_lead_time_days ?? '';
         document.getElementById('edit_stock_change_reason').value = '';
         document.getElementById('edit_unit').value = product.unit || 'pcs';
         document.getElementById('edit_description').value = product.description || '';
+        updateStockReasonRequirement();
 
         // Image preview
         const previewImg = document.getElementById('edit_image_preview');
@@ -425,6 +456,12 @@
         if (window.lucide) {
             lucide.createIcons();
         }
+    }
+
+    function updateStockReasonRequirement() {
+        const stockField = document.getElementById('edit_stock');
+        const reasonField = document.getElementById('edit_stock_change_reason');
+        reasonField.required = Number(stockField.value) !== Number(stockField.dataset.originalStock);
     }
 
     function closeEditModal() {
@@ -459,5 +496,44 @@
             this.step = '1000';
         });
     });
+
+    document.getElementById('edit_stock').addEventListener('input', updateStockReasonRequirement);
+
+    @if ($oldEditProduct)
+        const oldEditProduct = @json($oldEditProduct);
+        openEditModal(oldEditProduct);
+        const oldEditValues = {
+            name: @json(old('name')),
+            category_id: @json(old('category_id')),
+            barcode: @json(old('barcode')),
+            cost_price: @json(old('cost_price')),
+            sell_price: @json(old('sell_price')),
+            stock: @json(old('stock')),
+            min_stock: @json(old('min_stock')),
+            supplier_lead_time_days: @json(old('supplier_lead_time_days')),
+            unit: @json(old('unit')),
+            description: @json(old('description')),
+            stock_change_reason: @json(old('stock_change_reason')),
+        };
+        const oldEditFieldIds = {
+            name: 'edit_name',
+            category_id: 'edit_category_id',
+            barcode: 'edit_barcode',
+            cost_price: 'edit_cost_price',
+            sell_price: 'edit_sell_price',
+            stock: 'edit_stock',
+            min_stock: 'edit_min_stock',
+            supplier_lead_time_days: 'edit_supplier_lead_time_days',
+            unit: 'edit_unit',
+            description: 'edit_description',
+            stock_change_reason: 'edit_stock_change_reason',
+        };
+        Object.entries(oldEditFieldIds).forEach(([inputName, elementId]) => {
+            if (oldEditValues[inputName] !== undefined) {
+                document.getElementById(elementId).value = oldEditValues[inputName] ?? '';
+            }
+        });
+        updateStockReasonRequirement();
+    @endif
 </script>
 @endsection

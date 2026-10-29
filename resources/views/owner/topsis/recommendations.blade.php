@@ -1,189 +1,97 @@
-@extends('layouts.owner', ['title' => 'Rekomendasi TOPSIS - Mobeli', 'header' => 'Rekomendasi Strategis Toko (Hasil Analisis TOPSIS)'])
+@extends('layouts.owner', ['title' => 'Rekomendasi TOPSIS - Mobeli', 'header' => 'Rekomendasi Prioritas Restock'])
 
 @section('content')
-<div class="space-y-6 pb-12">
-    <!-- Header Summary -->
-    <div class="bg-white p-6 rounded-2xl border border-neutral-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <span class="text-xs font-bold uppercase tracking-wider text-emerald-700">Hasil Keputusan Cerdas SPK</span>
-            <h2 class="text-xl font-bold font-heading text-neutral-900 mt-0.5">Insight & Rekomendasi Tindakan Toko</h2>
-            <p class="text-xs text-neutral-500 mt-1">
-                Data dihitung otomatis berdasarkan preferensi kedekatan relatif ($C_i$) terhadap solusi ideal positif dan negatif.
-                Perhitungan terakhir: {{ $latestResult->created_at->format('d/m/Y H:i') }}.
-            </p>
-        </div>
-        <div class="flex items-center gap-2">
-            <button type="button" onclick="window.print()" class="px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
-                <i data-lucide="printer" class="w-4 h-4"></i> Cetak Laporan
-            </button>
-            <a href="{{ route('admin.topsis.calculate') }}" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5">
-                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Hitung Ulang Data Baru
-            </a>
-        </div>
-    </div>
-
-    <!-- 3 Actionable Groups Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- 1. Restock Segera -->
-        <div class="bg-white rounded-2xl border-2 border-orange-400 p-5 shadow-xs space-y-3">
-            <div class="flex items-center justify-between pb-3 border-b border-orange-100">
-                <div class="flex items-center gap-2">
-                    <span class="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-sm">
-                        ⚠️
-                    </span>
-                    <div>
-                        <h3 class="font-bold text-sm text-neutral-900">Restock Segera</h3>
-                        <span class="text-[10px] text-orange-600 font-medium">Stok < Ambang Batas Minimum</span>
-                    </div>
-                </div>
+<div class="space-y-6 pb-10">
+    <section class="rounded-2xl border border-neutral-200 bg-white p-5 shadow-xs sm:p-6">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <span class="text-xs font-bold uppercase tracking-wider text-blue-700">Hasil analisis TOPSIS</span>
+                <h1 class="mt-1 font-heading text-xl font-extrabold text-neutral-900">Prioritas Relatif Restock Produk</h1>
+                <p class="mt-2 text-sm text-neutral-600">
+                    Perhitungan {{ $latestResult->created_at->format('d/m/Y H:i') }} · Periode penjualan
+                    {{ \Illuminate\Support\Carbon::parse($latestResult->period_start)->format('d/m/Y H:i') }}–{{ \Illuminate\Support\Carbon::parse($latestResult->period_end)->format('d/m/Y H:i') }}.
+                </p>
             </div>
-
-            <div class="space-y-2">
-                @php
-                    $restockList = collect($preferences)->filter(function($i) {
-                        return $i['product']['stock'] <= $i['product']['min_stock'];
-                    });
-                @endphp
-
-                @forelse($restockList as $item)
-                    <div class="p-3 bg-orange-50/60 rounded-xl border border-orange-100">
-                        <div class="flex items-center justify-between">
-                            <span class="font-bold text-xs text-neutral-900">{{ $item['product']['name'] }}</span>
-                            <span class="text-[10px] font-mono text-orange-700 font-bold">Ci: {{ $item['ci'] }}</span>
-                        </div>
-                        <div class="flex items-center justify-between text-[11px] text-neutral-500 mt-1">
-                            <span>Sisa: <strong class="text-orange-700 font-bold">{{ $item['product']['stock'] }}</strong> (Min: {{ $item['product']['min_stock'] }})</span>
-                            <span class="text-emerald-700 font-semibold">Urgensi Tinggi</span>
-                        </div>
-                    </div>
-                @empty
-                    <p class="text-xs text-neutral-400 py-4 text-center">Semua stok produk saat ini masih aman.</p>
-                @endforelse
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('admin.topsis.calculate') }}" class="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2.5 text-xs font-bold text-neutral-700 hover:bg-neutral-50">
+                    <i data-lucide="table-2" class="h-4 w-4"></i> Detail perhitungan
+                </a>
+                <a href="{{ route('admin.topsis.history') }}" class="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-800">
+                    <i data-lucide="history" class="h-4 w-4"></i> Riwayat
+                </a>
             </div>
         </div>
-
-        <!-- 2. Produk Unggulan -->
-        <div class="bg-white rounded-2xl border-2 border-emerald-500 p-5 shadow-xs space-y-3">
-            <div class="flex items-center justify-between pb-3 border-b border-emerald-100">
-                <div class="flex items-center gap-2">
-                    <span class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm">
-                        ⭐
-                    </span>
-                    <div>
-                        <h3 class="font-bold text-sm text-neutral-900">Produk Unggulan</h3>
-                        <span class="text-[10px] text-emerald-600 font-medium">Performa Tertinggi & Margin Bagus</span>
-                    </div>
-                </div>
+        @if ($isLegacyResult)
+            <div role="status" class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+                Hasil ini berasal dari skema kriteria terdahulu. Data ditampilkan sesuai snapshot saat perhitungan dan tidak dihitung ulang dengan kriteria terbaru.
             </div>
+        @endif
+    </section>
 
-            <div class="space-y-2">
-                @php
-                    $topList = collect($preferences)->take(3);
-                @endphp
+    <section class="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-950">
+        Ranking menunjukkan prioritas relatif antarproduk berdasarkan data yang dinilai. Ranking bukan kepastian stok akan habis dan tidak menentukan jumlah unit yang perlu dibeli.
+    </section>
 
-                @foreach($topList as $item)
-                    <div class="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
-                        <div class="flex items-center justify-between">
-                            <span class="font-bold text-xs text-neutral-900">{{ $item['product']['name'] }}</span>
-                            <span class="text-[10px] font-mono text-emerald-800 font-bold">Ci: {{ $item['ci'] }}</span>
-                        </div>
-                        <div class="flex items-center justify-between text-[11px] text-neutral-500 mt-1">
-                            <span>Harga: Rp {{ number_format($item['product']['sell_price'], 0, ',', '.') }}</span>
-                            <span class="text-emerald-800 font-bold">Peringkat Teratas</span>
-                        </div>
-                    </div>
-                @endforeach
+    <section class="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xs">
+        <div class="flex flex-col gap-1 border-b border-neutral-100 p-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+                <h2 class="font-heading text-sm font-bold text-neutral-900">Ranking seluruh alternatif produk</h2>
+                <p class="mt-1 text-xs text-neutral-500">Nilai kriteria dan stok ditampilkan dari snapshot saat perhitungan.</p>
             </div>
+            <span class="text-xs font-semibold text-neutral-500">{{ count($preferences) }} produk dievaluasi</span>
         </div>
-
-        <!-- 3. Rekomendasi Promo / Clearance -->
-        <div class="bg-white rounded-2xl border-2 border-blue-400 p-5 shadow-xs space-y-3">
-            <div class="flex items-center justify-between pb-3 border-b border-blue-100">
-                <div class="flex items-center gap-2">
-                    <span class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
-                        🏷️
-                    </span>
-                    <div>
-                        <h3 class="font-bold text-sm text-neutral-900">Promo Clearance</h3>
-                        <span class="text-[10px] text-blue-600 font-medium">Percepat Perputaran Uang Kas</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="space-y-2">
-                @php
-                    $clearanceList = collect($preferences)->filter(function($i) {
-                        return $i['product']['stock'] > 30;
-                    })->take(3);
-                @endphp
-
-                @forelse($clearanceList as $item)
-                    <div class="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
-                        <div class="flex items-center justify-between">
-                            <span class="font-bold text-xs text-neutral-900">{{ $item['product']['name'] }}</span>
-                            <span class="text-[10px] font-mono text-blue-800 font-bold">Stok: {{ $item['product']['stock'] }}</span>
-                        </div>
-                        <div class="flex items-center justify-between text-[11px] text-neutral-500 mt-1">
-                            <span>Disarankan diskon 5-10%</span>
-                            <span class="text-blue-700 font-semibold">Bundling Sembako</span>
-                        </div>
-                    </div>
-                @empty
-                    <p class="text-xs text-neutral-400 py-4 text-center">Tidak ada penumpukan stok berlebih.</p>
-                @endforelse
-            </div>
-        </div>
-    </div>
-
-    <!-- Complete Ranking Table -->
-    <div class="bg-white rounded-2xl border border-neutral-200 overflow-hidden shadow-xs">
-        <div class="p-4 bg-neutral-50 border-b border-neutral-200 flex items-center justify-between">
-            <h3 class="font-bold text-xs uppercase tracking-wider text-neutral-700">Tabel Perankingan Seluruh Alternatif Produk</h3>
-            <span class="text-xs text-neutral-500">Total: {{ count($preferences) }} Produk Dievaluasi</span>
-        </div>
-
         <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left">
-                <thead class="bg-neutral-100/70 border-b border-neutral-200 text-neutral-600 uppercase font-semibold">
+            <table class="w-full min-w-[980px] text-left text-xs">
+                <thead class="bg-neutral-50 text-[10px] uppercase tracking-wide text-neutral-500">
                     <tr>
-                        <th class="p-3 text-center w-12">Peringkat</th>
-                        <th class="p-3">Nama Produk Sembako</th>
-                        <th class="p-3 text-right">Harga Jual</th>
-                        <th class="p-3 text-center">Sisa Stok</th>
-                        <th class="p-3 text-center font-mono">Skor Preferensi ($C_i$)</th>
-                        <th class="p-3 text-center">Status Rekomendasi</th>
-                        <th class="p-3">Alasan Prioritas</th>
+                        <th class="p-3">Ranking</th>
+                        <th class="p-3">Nama produk</th>
+                        <th class="p-3 text-right">Jumlah terjual</th>
+                        <th class="p-3 text-right">Stok tersedia</th>
+                        <th class="p-3 text-right">Waktu pengadaan</th>
+                        <th class="p-3 text-right">Preferensi TOPSIS</th>
+                        <th class="p-3">Status rekomendasi</th>
+                        <th class="p-3">Detail</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-neutral-100">
-                    @php $no = 1; @endphp
-                    @foreach($preferences as $item)
-                        <tr class="hover:bg-neutral-50 {{ $no <= 3 ? 'bg-emerald-50/20' : '' }}">
-                            <td class="p-3 text-center">
-                                <span class="w-6 h-6 rounded-full inline-flex items-center justify-center font-bold {{ $no === 1 ? 'bg-amber-400 text-slate-900' : ($no <= 3 ? 'bg-emerald-600 text-white' : 'bg-neutral-200 text-neutral-700') }}">
-                                    {{ $no }}
+                    @foreach ($preferences as $position => $item)
+                        @php
+                            $rank = (int) ($item['rank'] ?? ($position + 1));
+                            $salesCode = $isLegacyResult ? 'C2' : 'C1';
+                            $metrics = $item['metrics'] ?? [];
+                            $unitsSold = $metrics[$salesCode] ?? null;
+                            $product = $item['product'];
+                        @endphp
+                        <tr class="{{ $rank === 1 ? 'bg-blue-50/50' : '' }}">
+                            <td class="p-3">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full font-bold {{ $rank === 1 ? 'bg-blue-700 text-white' : 'bg-neutral-100 text-neutral-700' }}">
+                                    {{ $rank }}
                                 </span>
                             </td>
-                            <td class="p-3 font-bold text-neutral-900">{{ $item['product']['name'] }}</td>
-                            <td class="p-3 text-right price-font">Rp {{ number_format($item['product']['sell_price'], 0, ',', '.') }}</td>
-                            <td class="p-3 text-center font-mono {{ $item['product']['stock'] <= $item['product']['min_stock'] ? 'text-red-600 font-bold' : '' }}">
-                                {{ $item['product']['stock'] }} {{ $item['product']['unit'] }}
-                            </td>
-                            <td class="p-3 text-center font-mono font-extrabold text-sm text-emerald-800">
-                                {{ number_format($item['ci'], 4) }}
-                            </td>
-                            <td class="p-3 text-center">
-                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold {{ $item['product']['stock'] <= $item['product']['min_stock'] ? 'bg-orange-100 text-orange-800' : ($no <= 3 ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-700') }}">
-                                    {{ $item['product']['stock'] <= $item['product']['min_stock'] ? 'Restock Segera' : ($no <= 3 ? 'Produk Unggulan' : 'Normal') }}
+                            <td class="p-3 font-bold text-neutral-900">{{ $product['name'] }}</td>
+                            <td class="p-3 text-right font-mono">{{ $unitsSold === null ? '—' : number_format((float) $unitsSold, 0, ',', '.') }} {{ $unitsSold === null ? '' : 'unit' }}</td>
+                            <td class="p-3 text-right font-mono">{{ isset($product['stock']) ? number_format((int) $product['stock'], 0, ',', '.') : '—' }} {{ $product['unit'] ?? '' }}</td>
+                            <td class="p-3 text-right font-mono">{{ isset($product['supplier_lead_time_days']) ? number_format((int) $product['supplier_lead_time_days'], 0, ',', '.').' hari' : '—' }}</td>
+                            <td class="p-3 text-right font-mono font-bold text-blue-800">{{ number_format((float) $item['ci'], 6, ',', '.') }}</td>
+                            <td class="p-3">
+                                <span class="rounded-full px-2.5 py-1 text-[10px] font-bold {{ $rank === 1 ? 'bg-blue-100 text-blue-800' : 'bg-neutral-100 text-neutral-700' }}">
+                                    {{ $rank === 1 ? 'Prioritas tertinggi' : 'Prioritas relatif' }}
                                 </span>
                             </td>
-                            <td class="p-3 text-neutral-600">{{ $item['reason'] ?? ($item['recommendation'] ?? 'Evaluasi berbasis skor preferensi TOPSIS.') }}</td>
+                            <td class="p-3">
+                                <a href="{{ route('admin.topsis.history.show', $latestResult) }}" class="inline-flex items-center gap-1.5 font-bold text-blue-700 hover:text-blue-900">
+                                    <i data-lucide="external-link" class="h-3.5 w-3.5"></i> Lihat hitungan
+                                </a>
+                            </td>
                         </tr>
-                        @php $no++; @endphp
                     @endforeach
                 </tbody>
             </table>
         </div>
-    </div>
+        <p class="border-t border-neutral-100 px-5 py-4 text-xs leading-5 text-neutral-500">
+            Jumlah terjual berasal dari unit pada detail transaksi lunas selama periode penilaian. Stok dan waktu pengadaan mencerminkan kondisi ketika perhitungan disimpan.
+        </p>
+    </section>
 </div>
 @endsection

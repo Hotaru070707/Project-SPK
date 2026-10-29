@@ -113,5 +113,8 @@ Route::middleware(['auth', 'role:owner'])->prefix('admin')->name('admin.')->grou
     Route::get('/topsis', [TopsisController::class, 'criteria'])->name('topsis.criteria');
     Route::post('/topsis/kriteria', [TopsisController::class, 'updateCriteria'])->name('topsis.criteria.update');
     Route::get('/topsis/perhitungan', [TopsisController::class, 'calculate'])->name('topsis.calculate');
+    Route::post('/topsis/perhitungan', [TopsisController::class, 'runCalculation'])->name('topsis.calculate.run');
     Route::get('/topsis/rekomendasi', [TopsisController::class, 'recommendations'])->name('topsis.recommendations');
+    Route::get('/topsis/riwayat', [TopsisController::class, 'history'])->name('topsis.history');
+    Route::get('/topsis/riwayat/{result}', [TopsisController::class, 'showHistory'])->name('topsis.history.show');
 });

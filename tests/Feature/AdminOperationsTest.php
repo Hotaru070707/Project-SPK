@@ -59,6 +59,78 @@ class AdminOperationsTest extends TestCase
         $this->assertDatabaseCount('stock_movements', 0);
     }
 
+    public function test_owner_can_update_product_stock_and_audits_the_adjustment(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner', 'is_active' => true]);
+        $product = $this->createProduct(stock: 5);
+
+        $this->actingAs($owner)
+            ->put(route('admin.products.update', $product->id), [
+                'category_id' => $product->category_id,
+                'name' => $product->name,
+                'cost_price' => $product->cost_price,
+                'sell_price' => $product->sell_price,
+                'stock' => 12,
+                'min_stock' => $product->min_stock,
+                'supplier_lead_time_days' => $product->supplier_lead_time_days,
+                'stock_change_reason' => 'Hasil stok opname',
+                'unit' => $product->unit,
+                'description' => $product->description,
+            ])
+            ->assertRedirect(route('admin.products'))
+            ->assertSessionHas('success', 'Data produk berhasil diperbarui!');
+
+        $this->assertSame(12, $product->fresh()->stock);
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $product->id,
+            'user_id' => $owner->id,
+            'type' => 'adjustment',
+            'qty' => 7,
+            'stock_before' => 5,
+            'stock_after' => 12,
+            'reason' => 'Hasil stok opname',
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('admin.products'))
+            ->assertOk()
+            ->assertSee('12 kg');
+
+        $this->get(route('admin.stock'))
+            ->assertOk()
+            ->assertSee('Stok: 12');
+    }
+
+    public function test_owner_sees_stock_reason_validation_and_stock_is_not_changed_without_reason(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner', 'is_active' => true]);
+        $product = $this->createProduct(stock: 5);
+        $updateData = [
+            'edit_product_id' => $product->id,
+            'category_id' => $product->category_id,
+            'name' => $product->name,
+            'cost_price' => $product->cost_price,
+            'sell_price' => $product->sell_price,
+            'stock' => 12,
+            'min_stock' => $product->min_stock,
+            'supplier_lead_time_days' => $product->supplier_lead_time_days,
+            'unit' => $product->unit,
+            'description' => $product->description,
+        ];
+
+        $this->actingAs($owner)
+            ->from(route('admin.products'))
+            ->followingRedirects()
+            ->put(route('admin.products.update', $product->id), $updateData)
+            ->assertOk()
+            ->assertSee('Alasan wajib diisi jika stok produk diubah.')
+            ->assertSee('id="edit_stock_change_reason_error"', false)
+            ->assertSee('openEditModal(oldEditProduct)', false);
+
+        $this->assertSame(5, $product->fresh()->stock);
+        $this->assertDatabaseCount('stock_movements', 0);
+    }
+
     public function test_sales_report_separates_revenue_from_gross_profit(): void
     {
         $owner = User::factory()->create(['role' => 'owner', 'is_active' => true]);

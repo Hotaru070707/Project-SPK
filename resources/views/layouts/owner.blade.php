@@ -90,6 +90,9 @@
                     <a href="{{ route('admin.topsis.recommendations') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.topsis.recommendations') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
                         <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400"></i> Rekomendasi Restock Produk
                     </a>
+                    <a href="{{ route('admin.topsis.history') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl {{ request()->routeIs('admin.topsis.history*') ? 'bg-emerald-600 text-white font-bold' : 'hover:bg-slate-800 text-slate-300' }}">
+                        <i data-lucide="history" class="w-4 h-4 text-emerald-400"></i> Riwayat Perhitungan
+                    </a>
                 </div>
             </div>
 
