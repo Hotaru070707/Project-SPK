@@ -13,6 +13,7 @@ use App\Services\StockService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -461,19 +462,14 @@ class AdminController extends Controller
     {
         [$startDate, $endDate] = $this->reportPeriod($request);
         $ordersQuery = $this->paidOrdersBetween($startDate, $endDate);
-        $orders = (clone $ordersQuery)->with(['customer', 'items'])->latest('paid_at')->paginate(20)->withQueryString();
+        $orders = (clone $ordersQuery)->with('customer')->latest('paid_at')->paginate(20)->withQueryString();
         $revenue = (clone $ordersQuery)->sum('total');
-        $grossProfit = OrderItem::query()
-            ->whereHas('order', function ($query) use ($startDate, $endDate): void {
-                $query->where('payment_status', 'paid')->whereBetween('paid_at', [$startDate, $endDate]);
-            })
+        $orderItemsQuery = $this->paidOrderItemsBetween($startDate, $endDate);
+        $grossProfit = (clone $orderItemsQuery)
             ->sum(DB::raw('(price - cost_price) * qty'));
         $totalTransactions = (clone $ordersQuery)->count();
-        $topProducts = OrderItem::query()
+        $topProducts = (clone $orderItemsQuery)
             ->selectRaw('product_name, SUM(qty) as units_sold, SUM(subtotal) as revenue, SUM((price - cost_price) * qty) as gross_profit')
-            ->whereHas('order', function ($query) use ($startDate, $endDate): void {
-                $query->where('payment_status', 'paid')->whereBetween('paid_at', [$startDate, $endDate]);
-            })
             ->groupBy('product_name')
             ->orderByDesc('units_sold')
             ->limit(10)
@@ -482,12 +478,6 @@ class AdminController extends Controller
             ->where('is_active', true)
             ->whereColumn('stock', '<=', 'min_stock')
             ->orderBy('stock')
-            ->get();
-        $movements = StockMovement::query()
-            ->with('product')
-            ->whereBetween('created_at', [$startDate, $endDate])
-            ->latest()
-            ->limit(20)
             ->get();
 
         return view('owner.reports.index', compact(
@@ -498,8 +488,7 @@ class AdminController extends Controller
             'revenue',
             'grossProfit',
             'topProducts',
-            'lowStockProducts',
-            'movements'
+            'lowStockProducts'
         ));
     }
 
@@ -513,7 +502,13 @@ class AdminController extends Controller
             fwrite($output, "\xEF\xBB\xBF");
             fputcsv($output, ['No. Transaksi', 'Tanggal', 'Kanal', 'Pelanggan', 'Metode Pembayaran', 'Omzet', 'Laba Kotor'], ';', '"', '\\');
 
-            (clone $ordersQuery)->with(['customer', 'items'])->orderBy('id')->chunk(200, function ($orders) use ($output): void {
+            (clone $ordersQuery)->with([
+                'customer',
+                'items' => function (HasMany $query): void {
+                    $query->where('item_status', 'normal')
+                        ->where('qty', '>', 0);
+                },
+            ])->orderBy('id')->chunk(200, function ($orders) use ($output): void {
                 foreach ($orders as $order) {
                     $grossProfit = $order->items->sum(fn ($item) => ($item->price - $item->cost_price) * $item->qty);
                     fputcsv($output, [
@@ -581,8 +576,8 @@ class AdminController extends Controller
     private function reportPeriod(Request $request): array
     {
         $validated = $request->validate([
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'start_date' => ['nullable', 'date_format:Y-m-d'],
+            'end_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start_date'],
         ]);
         $startDate = Carbon::parse($validated['start_date'] ?? now()->startOfMonth())->startOfDay();
         $endDate = Carbon::parse($validated['end_date'] ?? now())->endOfDay();
@@ -594,6 +589,17 @@ class AdminController extends Controller
         }
 
         return [$startDate, $endDate];
+    }
+
+    private function paidOrderItemsBetween(Carbon $startDate, Carbon $endDate): Builder
+    {
+        return OrderItem::query()
+            ->where('item_status', 'normal')
+            ->where('qty', '>', 0)
+            ->whereHas('order', function (Builder $query) use ($startDate, $endDate): void {
+                $query->where('payment_status', 'paid')
+                    ->whereBetween('paid_at', [$startDate, $endDate]);
+            });
     }
 
     private function paidOrdersBetween(Carbon $startDate, Carbon $endDate): Builder

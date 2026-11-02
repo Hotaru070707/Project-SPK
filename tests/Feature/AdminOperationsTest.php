@@ -189,6 +189,7 @@ class AdminOperationsTest extends TestCase
 
     public function test_sales_report_separates_revenue_from_gross_profit(): void
     {
+        $this->travelTo(now()->setDate(2026, 6, 15)->setTime(12, 0));
         $owner = User::factory()->create(['role' => 'owner', 'is_active' => true]);
         $product = $this->createProduct(stock: 5);
         $order = Order::query()->create([
@@ -216,11 +217,104 @@ class AdminOperationsTest extends TestCase
         $this->actingAs($owner)
             ->get(route('admin.reports'))
             ->assertOk()
+            ->assertSee('value="2026-06-01"', false)
+            ->assertSee('value="2026-06-15"', false)
             ->assertSee('Omzet Transaksi Lunas')
             ->assertSee('Laba Kotor')
             ->assertSee('Rp 200')
             ->assertSee('Rp 80')
             ->assertSee($product->name);
+    }
+
+    public function test_sales_report_and_csv_use_selected_period_and_only_count_paid_normal_items(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner', 'is_active' => true]);
+        $product = $this->createProduct(stock: 2);
+        $paidOrder = $this->createReportOrder('POS-REPORT-IN-PERIOD', 'paid', '2026-06-30 23:59:59', 200);
+        $outsideOrder = $this->createReportOrder('POS-REPORT-OUTSIDE', 'paid', '2026-05-31 23:59:59', 500);
+        $pendingOrder = $this->createReportOrder('POS-REPORT-PENDING', 'pending', '2026-06-15 12:00:00', 900);
+
+        OrderItem::query()->create([
+            'order_id' => $paidOrder->id,
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'price' => 100,
+            'cost_price' => 60,
+            'qty' => 2,
+            'subtotal' => 200,
+        ]);
+        OrderItem::query()->create([
+            'order_id' => $paidOrder->id,
+            'product_id' => $product->id,
+            'product_name' => 'Item yang diretur',
+            'price' => 100,
+            'cost_price' => 60,
+            'qty' => 3,
+            'subtotal' => 300,
+            'item_status' => 'returned',
+        ]);
+        OrderItem::query()->create([
+            'order_id' => $outsideOrder->id,
+            'product_id' => $product->id,
+            'product_name' => 'Produk di luar periode',
+            'price' => 100,
+            'cost_price' => 60,
+            'qty' => 5,
+            'subtotal' => 500,
+        ]);
+        OrderItem::query()->create([
+            'order_id' => $pendingOrder->id,
+            'product_id' => $product->id,
+            'product_name' => 'Produk belum lunas',
+            'price' => 100,
+            'cost_price' => 60,
+            'qty' => 9,
+            'subtotal' => 900,
+        ]);
+
+        $filters = ['start_date' => '2026-06-01', 'end_date' => '2026-06-30'];
+        $reportResponse = $this->actingAs($owner)
+            ->get(route('admin.reports', $filters))
+            ->assertOk()
+            ->assertSee('value="2026-06-01"', false)
+            ->assertSee('value="2026-06-30"', false)
+            ->assertSee('1 transaksi pada periode ini')
+            ->assertSee('Rp 80')
+            ->assertSee($product->name)
+            ->assertSee('2 / min 3 kg')
+            ->assertSee($paidOrder->order_number)
+            ->assertDontSee($outsideOrder->order_number)
+            ->assertDontSee($pendingOrder->order_number)
+            ->assertDontSee('Item yang diretur')
+            ->assertDontSee('Produk di luar periode')
+            ->assertDontSee('Produk belum lunas')
+            ->assertDontSee('Mutasi Stok Terbaru dalam Periode');
+
+        $this->assertStringContainsString(
+            '<td class="p-3 font-semibold text-neutral-900">'.$product->name.'</td><td class="p-3 text-right">2</td><td class="p-3 text-right">Rp 200</td><td class="p-3 text-right">Rp 80</td>',
+            $reportResponse->getContent()
+        );
+
+        $csvResponse = $this->get(route('admin.reports.export', $filters))
+            ->assertDownload('laporan-penjualan.csv');
+        $csv = $csvResponse->streamedContent();
+
+        $this->assertStringContainsString($paidOrder->order_number, $csv);
+        $this->assertStringContainsString('80.00', $csv);
+        $this->assertStringNotContainsString($outsideOrder->order_number, $csv);
+        $this->assertStringNotContainsString($pendingOrder->order_number, $csv);
+    }
+
+    public function test_sales_report_rejects_an_end_date_before_the_start_date(): void
+    {
+        $owner = User::factory()->create(['role' => 'owner', 'is_active' => true]);
+
+        $this->actingAs($owner)
+            ->get(route('admin.reports', [
+                'start_date' => '2026-06-30',
+                'end_date' => '2026-06-01',
+            ]))
+            ->assertInvalid(['end_date']);
     }
 
     public function test_owner_can_create_cashier_account_without_assigning_another_role(): void
@@ -298,6 +392,21 @@ class AdminOperationsTest extends TestCase
             'supplier_lead_time_days' => 2,
             'unit' => 'kg',
             'is_active' => true,
+        ]);
+    }
+
+    private function createReportOrder(string $orderNumber, string $paymentStatus, string $paidAt, int $total): Order
+    {
+        return Order::query()->create([
+            'order_number' => $orderNumber,
+            'type' => 'offline',
+            'subtotal' => $total,
+            'discount' => 0,
+            'total' => $total,
+            'payment_method' => 'cash',
+            'payment_status' => $paymentStatus,
+            'order_status' => $paymentStatus === 'paid' ? 'completed' : 'pending_payment',
+            'paid_at' => $paidAt,
         ]);
     }
 }

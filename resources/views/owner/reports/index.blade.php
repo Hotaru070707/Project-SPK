@@ -88,20 +88,5 @@
         <div class="border-t border-neutral-100 p-4">{{ $orders->links() }}</div>
     </section>
 
-    <section class="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-        <div class="border-b border-neutral-200 bg-neutral-50 p-4">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-neutral-700">Mutasi Stok Terbaru dalam Periode</h2>
-        </div>
-        <div class="divide-y divide-neutral-100">
-            @forelse($movements as $movement)
-                <div class="flex flex-wrap items-center justify-between gap-2 p-3 text-xs">
-                    <span>{{ $movement->created_at->format('d/m/Y H:i') }} · {{ $movement->product->name ?? 'Produk dihapus' }}</span>
-                    <span class="text-neutral-600">{{ $movement->reason }} · {{ $movement->stock_before }} → {{ $movement->stock_after }}</span>
-                </div>
-            @empty
-                <p class="p-6 text-center text-xs text-neutral-500">Tidak ada mutasi stok pada periode ini.</p>
-            @endforelse
-        </div>
-    </section>
 </div>
 @endsection
